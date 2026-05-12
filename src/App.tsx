@@ -71,7 +71,6 @@ export default function App() {
 
   const isSpeakingRef = useRef(false);
   const lastMyraTextRef = useRef('');
-  const msgEndRef = useRef<HTMLDivElement>(null);
 
   // Active theme
   const theme = useMemo(
@@ -144,7 +143,18 @@ export default function App() {
   const { isConnected, isSpeaking, connect, sendText, interruptSpeaking, clearConversation, connectionState, lastValidationError } =
     useMultiAI(settings, aiCallbacks);
 
-  const { parse, executeCommand } = useCommandParser(settings.primeContacts);
+  const { parse: parseCommand, executeCommand: executeCmd } = useCommandParser(settings.primeContacts);
+  const parseRef = useRef(parseCommand);
+  const execRef = useRef(executeCmd);
+  const isConnectedRef = useRef(isConnected);
+  const sendTextRef = useRef(sendText);
+  const speakTTSRef = useRef(speakTTS);
+  const getDemoResponseRef = useRef<any>(null);
+  useEffect(() => { parseRef.current = parseCommand; }, [parseCommand]);
+  useEffect(() => { execRef.current = executeCmd; }, [executeCmd]);
+  useEffect(() => { isConnectedRef.current = isConnected; }, [isConnected]);
+  useEffect(() => { sendTextRef.current = sendText; }, [sendText]);
+  useEffect(() => { speakTTSRef.current = speakTTS; }, [speakTTS]);
 
   // Demo response
   const getDemoResponse = useCallback((text: string): string => {
@@ -162,15 +172,18 @@ export default function App() {
     return settings.personalityMode === 'professional' ? `Understood, ${name}.` : `Haan ${name}, batao na! 😊`;
   }, [settings.userName, settings.personalityMode, getMemoriesForPrompt]);
 
+  // Update demo response ref after it's declared
+  useEffect(() => { getDemoResponseRef.current = getDemoResponse; }, [getDemoResponse]);
+
   // Audio callbacks
   const audioCallbacks: AudioEngineCallbacks = useMemo(() => ({
     onAmplitudeChanged: (rms: number) => setAmplitude(rms),
     onTranscriptReady: (text: string) => {
       if (isSpeakingRef.current) return;
       addMessage(text, true);
-      const command = parse(text);
+      const command = parseRef.current(text);
       if (command) {
-        const result = executeCommand(command);
+        const result = execRef.current(command);
         setTimeout(() => {
           addMessage(result, false);
           setOrbState('speaking');
@@ -178,17 +191,17 @@ export default function App() {
         }, 200);
         return;
       }
-      if (isConnected) sendText(text);
+      if (isConnectedRef.current) sendTextRef.current(text);
       else {
-        const r = getDemoResponse(text);
+        const r = getDemoResponseRef.current(text);
         addMessage(r, false);
         setOrbState('speaking');
-        speakTTS(r, () => { setOrbState('idle'); isSpeakingRef.current = false; });
+        speakTTSRef.current(r, () => { setOrbState('idle'); isSpeakingRef.current = false; });
       }
     },
     onListeningChange: () => {},
     onError: () => {},
-  }), [addMessage, parse, executeCommand, isConnected, sendText, getDemoResponse, speakTTS]);
+  }), []);
 
   const { isListening, isMuted, startListening, stopListening, setMuted } = useAudioEngine(audioCallbacks);
 
@@ -196,7 +209,7 @@ export default function App() {
   useWakeWord({
     enabled: settings.wakeWordEnabled && !isListening && !isSpeaking,
     wakeWord: settings.wakeWord,
-    language: settings.language,
+    language: settings.ttsLanguage === 'hi' ? 'hi-IN' : 'en-IN',
     onWake: () => {
       if (settings.hapticEnabled) vibrate([30, 30, 50]);
       setStatusText('🎤 Wake word detected!');
@@ -242,26 +255,33 @@ export default function App() {
   const handleMicPress = useCallback(() => {
     if (settings.hapticEnabled) vibrate(15);
     if (isMuted) { setMuted(false); return; }
-    if (isListening) stopListening();
-    else {
-      if (!isConnected && hasAnyKey(settings)) {
-        setOrbState('thinking');
-        setStatusText('API key verify ho rahi hai... 🔄');
-        connect().then(() => { startListening(); });
-      } else {
-        startListening();
-      }
+    if (isListening) { stopListening(); return; }
+    if (isConnected) { startListening(); return; }
+    // Not connected yet — try to connect then listen
+    if (hasAnyKey(settings)) {
+      setOrbState('thinking');
+      setStatusText('API key verify ho rahi hai... 🔄');
+      connect();
+      // Poll for connection, then start listening
+      const pollInterval = setInterval(() => {
+        if (isConnected) {
+          clearInterval(pollInterval);
+          startListening();
+        }
+      }, 300);
+      // Timeout after 10s
+      setTimeout(() => clearInterval(pollInterval), 10000);
     }
   }, [isMuted, isListening, isConnected, connect, startListening, stopListening, setMuted, settings]);
 
   const handleLongPress = useCallback(() => {
     if (settings.hapticEnabled) vibrate([30, 50, 30]);
-    interruptSpeaking(); cancelTTS(); stopListening();
-    setStatusText('Interrupted ⏹️');
+    interruptSpeaking(); cancelTTS(); stopListening(); setMuted(true);
+    setStatusText('Muted 🔇 — Tap mic to unmute');
     setOrbState('idle');
     isSpeakingRef.current = false;
-    setTimeout(() => setStatusText('Tap karke bolo 💬'), 1500);
-  }, [interruptSpeaking, stopListening, cancelTTS, settings]);
+    setTimeout(() => { if (isMuted) setStatusText('Muted 🔇 — Tap mic to unmute'); }, 1500);
+  }, [interruptSpeaking, stopListening, cancelTTS, setMuted, settings, isMuted]);
 
   // Auto-connect
   useEffect(() => {
@@ -315,9 +335,9 @@ export default function App() {
   const handleSendText = useCallback((text: string) => {
     if (settings.hapticEnabled) vibrate(10);
     addMessage(text, true);
-    const command = parse(text);
+    const command = parseCommand(text);
     if (command) {
-      const result = executeCommand(command);
+      const result = executeCmd(command);
       setTimeout(() => {
         addMessage(result, false);
         setOrbState('speaking');
@@ -332,11 +352,14 @@ export default function App() {
       setOrbState('speaking');
       speakTTS(r, () => { setOrbState('idle'); isSpeakingRef.current = false; });
     }
-  }, [addMessage, parse, executeCommand, sendText, isConnected, getDemoResponse, speakTTS, settings]);
+  }, [addMessage, parseCommand, executeCmd, sendText, isConnected, getDemoResponse, speakTTS, settings]);
 
-  // Track token stats
+  // Track token stats (only when messages actually change)
+  const prevMsgLenRef = useRef(0);
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && messages.length !== prevMsgLenRef.current) {
+      prevMsgLenRef.current = messages.length;
+      const lastMsg = messages[messages.length - 1];
       const estCost = messages.filter(m => !m.isUser).reduce((acc, m) => acc + (m.text.length / 4) * 0.000001 * 3, 0);
       setTokenStats(prev => ({
         ...prev,
@@ -347,12 +370,12 @@ export default function App() {
           ...prev.providerBreakdown,
           [settings.aiProvider]: {
             count: (prev.providerBreakdown[settings.aiProvider]?.count || 0) + 1,
-            tokens: (prev.providerBreakdown[settings.aiProvider]?.tokens || 0) + Math.ceil(messages[messages.length - 1]?.text.length / 4),
+            tokens: (prev.providerBreakdown[settings.aiProvider]?.tokens || 0) + Math.ceil(lastMsg?.text.length / 4),
           },
         },
       }));
     }
-  }, [messages.length]);
+  }, [messages.length, messages, settings.aiProvider]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -514,7 +537,6 @@ export default function App() {
       {/* Chat */}
       <div className="relative z-20 mx-4 mt-3">
         <ChatPanel messages={messages} accentColor={theme.primary} streamingText={streamingText} />
-        <div ref={msgEndRef} />
         <TypingIndicator active={isThinking && !streamingText} accentColor={theme.primary} />
       </div>
 
@@ -538,7 +560,7 @@ export default function App() {
       <TokenTracker open={showTokens} accentColor={theme.primary} stats={tokenStats} onClose={() => setShowTokens(false)} onReset={() => setTokenStats({ requestCount: 0, totalTokens: 0, estimatedCost: 0, providerBreakdown: {} })} />
       <BackupPanel open={showBackup} accentColor={theme.primary} onClose={() => setShowBackup(false)} onImport={handleImport} />
       <MemoryPanel open={showMemory} memories={memories} accentColor={theme.primary} onRemove={removeMemory} onClear={clearMemories} onClose={() => setShowMemory(false)} />
-      <ChatSearchFilter open={showSearch} messages={messages} accentColor={theme.primary} onSelect={() => {}} onClose={() => setShowSearch(false)} />
+      <ChatSearchFilter open={showSearch} messages={messages} accentColor={theme.primary} onSelect={() => setShowSearch(false)} onClose={() => setShowSearch(false)} />
 
       {/* Call Dialog */}
       {showCallDialog && (
@@ -596,27 +618,27 @@ function ConnectionBadge({ isConnected, connectionState, lastError, onReconnect,
     );
   }
   if (connectionState === 'failed') {
+    const displayError = lastError || 'Unknown error';
     return (
       <button
         onClick={onReconnect}
-        className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 bg-[#1A0000] text-[#FF6D6D] hover:bg-[#2A0000] transition-colors"
-        title={lastError || 'Connection failed — tap to retry'}
-        style={{ borderColor: `${accent}55` }}
+        className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 bg-[#1A0000] text-[#FF6D6D] hover:bg-[#2A0000] transition-colors truncate max-w-[120px]"
+        title={displayError}
       >
-        ❌ {lastError ? 'Retry' : 'Reconnect'}
+        ❌ Retry
       </button>
     );
   }
   if (isConnected) {
     return (
-      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 bg-[#001A00] text-[#00E676]" style={{ backgroundColor: `${accent}18`, color: accent }}>
+      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: `${accent}18`, color: accent }}>
         ✓ Connected
       </span>
     );
   }
   return (
     <span className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 bg-[#111] text-[#666]">
-      ○ Offline
+      ○ No API Key
     </span>
   );
 }
