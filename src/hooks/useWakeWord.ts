@@ -7,45 +7,79 @@ interface UseWakeWordOptions {
   language?: string;
 }
 
-/**
- * Background listener that triggers `onWake` when wake phrase is detected.
- * Uses Web Speech API in a low-overhead loop.
- */
+function normalize(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9\u0900-\u097f\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function getWakeVariants(wakeWord: string) {
+  const base = normalize(wakeWord || 'hey myra');
+  return Array.from(new Set([
+    base,
+    'hey myra',
+    'hi myra',
+    'ok myra',
+    'okay myra',
+    'myra',
+    'मायरा',
+    'हे मायरा',
+  ].map(normalize).filter(Boolean)));
+}
+
+function getSpeechRecognition() {
+  return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+}
+
 export function useWakeWord({ enabled, wakeWord, onWake, language = 'en-IN' }: UseWakeWordOptions) {
   const [isActive, setIsActive] = useState(false);
+  const [error, setError] = useState('');
   const recognitionRef = useRef<any>(null);
-  const wakeRef = useRef(wakeWord.toLowerCase());
+  const variantsRef = useRef(getWakeVariants(wakeWord));
   const onWakeRef = useRef(onWake);
   const enabledRef = useRef(enabled);
+  const languageRef = useRef(language);
+  const restartTimerRef = useRef<number | null>(null);
 
-  useEffect(() => { wakeRef.current = wakeWord.toLowerCase(); }, [wakeWord]);
+  useEffect(() => { variantsRef.current = getWakeVariants(wakeWord); }, [wakeWord]);
   useEffect(() => { onWakeRef.current = onWake; }, [onWake]);
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
+  useEffect(() => { languageRef.current = language; }, [language]);
 
   const stop = useCallback(() => {
+    enabledRef.current = false;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      try { recognitionRef.current.onend = null; recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
     setIsActive(false);
   }, []);
 
   const start = useCallback(() => {
-    if (!enabledRef.current) return;
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-
+    enabledRef.current = true;
+    const SR = getSpeechRecognition();
+    if (!SR) {
+      setError('Wake word unsupported. Chrome/Edge browser use karein.');
+      return;
+    }
     if (recognitionRef.current) return;
+
     try {
       const recognition = new SR();
-      recognition.lang = language;
+      recognition.lang = languageRef.current;
       recognition.continuous = true;
       recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
 
       recognition.onresult = (event: any) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript.toLowerCase();
-          if (transcript.includes(wakeRef.current)) {
+          const transcript = normalize(event.results[i][0].transcript || '');
+          if (!transcript) continue;
+          const matched = variantsRef.current.some(phrase => transcript.includes(phrase));
+          if (matched) {
+            setError('');
             onWakeRef.current();
             try { recognition.stop(); } catch { /* ignore */ }
             return;
@@ -53,22 +87,31 @@ export function useWakeWord({ enabled, wakeWord, onWake, language = 'en-IN' }: U
         }
       };
 
-      recognition.onerror = () => { /* ignore — auto-restart */ };
+      recognition.onerror = (event: any) => {
+        const code = event?.error || 'unknown';
+        if (code === 'no-speech' || code === 'aborted') return;
+        if (code === 'not-allowed') setError('Mic permission denied. Wake word ke liye mic allow karo.');
+        else setError(`Wake word error: ${code}`);
+      };
 
       recognition.onend = () => {
         recognitionRef.current = null;
+        setIsActive(false);
         if (enabledRef.current) {
-          setTimeout(() => start(), 300);
-        } else {
-          setIsActive(false);
+          restartTimerRef.current = window.setTimeout(() => {
+            if (enabledRef.current) start();
+          }, 500);
         }
       };
 
-      recognition.start();
       recognitionRef.current = recognition;
+      recognition.start();
       setIsActive(true);
-    } catch { /* mic busy */ }
-  }, [language]);
+      setError('');
+    } catch (e: any) {
+      setError(e?.message || 'Wake word start failed. Tap mic once, then enable wake word again.');
+    }
+  }, []);
 
   useEffect(() => {
     if (enabled) start();
@@ -76,5 +119,11 @@ export function useWakeWord({ enabled, wakeWord, onWake, language = 'en-IN' }: U
     return () => stop();
   }, [enabled, start, stop]);
 
-  return { isActive, start, stop };
+  return {
+    isActive,
+    error,
+    isSupported: Boolean(getSpeechRecognition()),
+    start,
+    stop,
+  };
 }

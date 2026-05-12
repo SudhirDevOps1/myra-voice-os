@@ -146,12 +146,14 @@ export default function App() {
   const { parse: parseCommand, executeCommand: executeCmd } = useCommandParser(settings.primeContacts);
   const parseRef = useRef(parseCommand);
   const execRef = useRef(executeCmd);
+  const addMessageRef = useRef(addMessage);
   const isConnectedRef = useRef(isConnected);
   const sendTextRef = useRef(sendText);
   const speakTTSRef = useRef(speakTTS);
   const getDemoResponseRef = useRef<any>(null);
   useEffect(() => { parseRef.current = parseCommand; }, [parseCommand]);
   useEffect(() => { execRef.current = executeCmd; }, [executeCmd]);
+  useEffect(() => { addMessageRef.current = addMessage; }, [addMessage]);
   useEffect(() => { isConnectedRef.current = isConnected; }, [isConnected]);
   useEffect(() => { sendTextRef.current = sendText; }, [sendText]);
   useEffect(() => { speakTTSRef.current = speakTTS; }, [speakTTS]);
@@ -180,21 +182,21 @@ export default function App() {
     onAmplitudeChanged: (rms: number) => setAmplitude(rms),
     onTranscriptReady: (text: string) => {
       if (isSpeakingRef.current) return;
-      addMessage(text, true);
+      addMessageRef.current(text, true);
       const command = parseRef.current(text);
       if (command) {
         const result = execRef.current(command);
         setTimeout(() => {
-          addMessage(result, false);
+          addMessageRef.current(result, false);
           setOrbState('speaking');
-          speakTTS(result, () => { setOrbState('idle'); isSpeakingRef.current = false; });
+          speakTTSRef.current(result, () => { setOrbState('idle'); isSpeakingRef.current = false; });
         }, 200);
         return;
       }
       if (isConnectedRef.current) sendTextRef.current(text);
       else {
-        const r = getDemoResponseRef.current(text);
-        addMessage(r, false);
+        const r = getDemoResponseRef.current?.(text) || 'Demo mode mein hoon. API key connect karo.';
+        addMessageRef.current(r, false);
         setOrbState('speaking');
         speakTTSRef.current(r, () => { setOrbState('idle'); isSpeakingRef.current = false; });
       }
@@ -203,17 +205,20 @@ export default function App() {
     onError: () => {},
   }), []);
 
-  const { isListening, isMuted, startListening, stopListening, setMuted } = useAudioEngine(audioCallbacks);
+  const { isListening, isMuted, startListening, stopListening, setMuted, lastError: audioError, isSupported: audioSupported } = useAudioEngine(
+    audioCallbacks,
+    { language: settings.ttsLanguage === 'hi' ? 'hi-IN' : 'en-IN' }
+  );
 
   // Wake word
-  useWakeWord({
+  const wake = useWakeWord({
     enabled: settings.wakeWordEnabled && !isListening && !isSpeaking,
     wakeWord: settings.wakeWord,
     language: settings.ttsLanguage === 'hi' ? 'hi-IN' : 'en-IN',
     onWake: () => {
       if (settings.hapticEnabled) vibrate([30, 30, 50]);
       setStatusText('🎤 Wake word detected!');
-      if (!isConnected && hasAnyKey(settings)) connect();
+      if (!isConnectedRef.current && hasAnyKey(settings)) connect();
       startListening();
     },
   });
@@ -254,7 +259,15 @@ export default function App() {
   // Mic
   const handleMicPress = useCallback(() => {
     if (settings.hapticEnabled) vibrate(15);
-    if (isMuted) { setMuted(false); return; }
+    if (!audioSupported) {
+      setStatusText('Voice unsupported. Chrome/Edge browser use karein.');
+      return;
+    }
+    if (isMuted) {
+      setMuted(false);
+      window.setTimeout(() => startListening(), 100);
+      return;
+    }
     if (isListening) { stopListening(); return; }
     if (isConnected) { startListening(); return; }
     // Not connected yet — try to connect then listen
@@ -263,8 +276,8 @@ export default function App() {
       setStatusText('API key verify ho rahi hai... 🔄');
       connect();
       // Poll for connection, then start listening
-      const pollInterval = setInterval(() => {
-        if (isConnected) {
+      const pollInterval = window.setInterval(() => {
+        if (isConnectedRef.current) {
           clearInterval(pollInterval);
           startListening();
         }
@@ -272,7 +285,7 @@ export default function App() {
       // Timeout after 10s
       setTimeout(() => clearInterval(pollInterval), 10000);
     }
-  }, [isMuted, isListening, isConnected, connect, startListening, stopListening, setMuted, settings]);
+  }, [isMuted, isListening, isConnected, connect, startListening, stopListening, setMuted, settings, audioSupported]);
 
   const handleLongPress = useCallback(() => {
     if (settings.hapticEnabled) vibrate([30, 50, 30]);
@@ -520,7 +533,20 @@ export default function App() {
             accent={theme.primary}
           />
           {settings.streamingEnabled && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${theme.primary}22`, color: theme.primary }}>⚡ STREAMING</span>}
-          {settings.wakeWordEnabled && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#1A0000] text-[#FF6D6D]">🎙️ "{settings.wakeWord}"</span>}
+          {settings.wakeWordEnabled && (
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+              title={wake.error || (wake.isActive ? 'Wake word listening' : 'Wake word enabled')}
+              style={{ backgroundColor: wake.isActive ? `${theme.primary}22` : '#1A0000', color: wake.isActive ? theme.primary : '#FF6D6D' }}
+            >
+              🎙️ {wake.isActive ? 'Wake ON' : wake.error ? 'Wake ERR' : `"${settings.wakeWord}"`}
+            </span>
+          )}
+          {audioError && (
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#1A0000] text-[#FF6D6D]" title={audioError}>
+              Mic issue
+            </span>
+          )}
           {activeVoice && (
             <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#111] text-[#888]" title={activeVoice.voiceURI}>
               🔊 {activeVoice.name.slice(0, 20)}{activeVoice.name.length > 20 ? '…' : ''}
