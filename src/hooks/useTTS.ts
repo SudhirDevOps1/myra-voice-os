@@ -114,6 +114,7 @@ export interface TTSResult {
   speak: (text: string, onEnd?: () => void) => void;
   cancel: () => void;
   isSpeaking: boolean;
+  speakRaw: (text: string) => void;
 }
 
 export function useTTS(prefs: VoicePrefs, ttsLanguage: 'en' | 'hi' = 'en', voiceId: string = 'Aoede'): TTSResult {
@@ -240,7 +241,18 @@ export function useTTS(prefs: VoicePrefs, ttsLanguage: 'en' | 'hi' = 'en', voice
     setIsSpeaking(false);
   }, []);
 
-  return { voices: sortedVoices, activeVoice, speak, cancel, isSpeaking };
+  const speakRaw = useCallback((text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (activeVoice) utterance.voice = activeVoice;
+    utterance.lang = activeVoice?.lang || (ttsLanguage === 'hi' ? 'hi-IN' : 'en-US');
+    utterance.rate = prefs.rate;
+    utterance.pitch = prefs.pitch;
+    window.speechSynthesis.speak(utterance);
+  }, [activeVoice, prefs, ttsLanguage]);
+
+  return { voices: sortedVoices, activeVoice, speak, cancel, isSpeaking, speakRaw };
 }
 
 // Split text into chunks at sentence boundaries

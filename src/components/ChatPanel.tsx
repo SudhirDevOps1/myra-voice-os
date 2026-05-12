@@ -26,6 +26,13 @@ export default function ChatPanel({ messages, className = '', accentColor = '#FF
     navigator.clipboard?.writeText(text).catch(() => {});
   };
 
+  const read = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(utterance);
+  };
+
   return (
     <div
       ref={scrollRef}
@@ -70,6 +77,13 @@ export default function ChatPanel({ messages, className = '', accentColor = '#FF
                 title="Copy"
               >
                 📋
+              </button>
+              <button
+                onClick={() => read(msg.text)}
+                className="text-[10px] text-[#555] hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Read aloud"
+              >
+                🔊
               </button>
             </div>
           </div>
