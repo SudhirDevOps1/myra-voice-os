@@ -676,24 +676,57 @@ export default function App() {
 
       {/* Call Dialog */}
       {showCallDialog && (
-        <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center">
-          <div className="bg-[#0A0A0A] rounded-2xl border p-8 text-center space-y-5 mx-4 max-w-sm w-full" style={{ borderColor: `${theme.primary}55` }}>
-            <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center animate-pulse" style={{ backgroundColor: `${theme.primary}1A`, borderWidth: 2, borderColor: theme.primary }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={theme.primary} strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+        <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-[#0A0A0A] rounded-2xl border p-6 sm:p-8 text-center space-y-4 max-w-sm w-full animate-fadeIn" style={{ borderColor: `${theme.primary}55` }}>
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-full flex items-center justify-center animate-pulse" style={{ backgroundColor: `${theme.primary}1A`, borderWidth: 2, borderColor: theme.primary }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={theme.primary} strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
             </div>
-            <h3 className="text-white text-lg font-bold">Incoming Call</h3>
-            <p className="text-xl font-black" style={{ color: theme.primary }}>{callerName}</p>
-            <div className="flex gap-4 mt-4">
-              <button onClick={handleAcceptCall} className="flex-1 bg-[#00E676] text-black py-3 rounded-xl font-bold text-sm">📞 Accept</button>
-              <button onClick={handleRejectCall} className="flex-1 text-white py-3 rounded-xl font-bold text-sm" style={{ backgroundColor: theme.primary }}>❌ Reject</button>
+            <div>
+              <h3 className="text-white text-base sm:text-lg font-bold">Incoming Call Detected</h3>
+              <p className="text-lg sm:text-xl font-black mt-1" style={{ color: theme.primary }}>{callerName}</p>
+            </div>
+
+            {/* Purpose documentation mapping to Android Telephony workflow */}
+            <div className="bg-[#111] rounded-xl p-3 text-left text-xs space-y-1.5 border border-[#222]">
+              <p className="text-[#AAA] font-bold text-[11px] flex items-center gap-1">
+                <span>💡</span> What is this feature?
+              </p>
+              <p className="text-[#888] leading-tight">
+                Simulates the Android <code className="text-white">CallMonitorService</code> workflow. MYRA asks AI if you should answer, then listens for your decision.
+              </p>
+              <p className="text-[#888] leading-tight pt-1 border-t border-[#1A1A1A]">
+                👉 <strong className="text-white">Say aloud:</strong> <code className="text-[#00E676]">"uthao"</code> or <code className="text-[#00E676]">"accept"</code> to pick up, <code className="text-[#FF6D6D]">"reject"</code> or <code className="text-[#FF6D6D]">"nahi"</code> to cancel.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={handleAcceptCall} className="flex-1 bg-[#00E676] text-black py-2.5 rounded-xl font-bold text-xs sm:text-sm active:scale-95 transition-all">
+                📞 Accept
+              </button>
+              <button onClick={handleRejectCall} className="flex-1 text-white py-2.5 rounded-xl font-bold text-xs sm:text-sm active:scale-95 transition-all" style={{ backgroundColor: theme.primary }}>
+                ❌ Reject
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Demo helper */}
-      <div className="fixed bottom-12 right-2 z-[60] opacity-30 hover:opacity-100">
-        <button onClick={() => (window as any).simulateIncomingCall?.('Priya')} className="text-[10px] text-[#555] bg-[#111] px-2 py-1 rounded border border-[#222]">📞 Demo Call</button>
+      {/* Telephony Simulator Controller Widget */}
+      <div className="fixed bottom-16 sm:bottom-20 right-3 z-[60] group">
+        <div className="flex items-center gap-1.5 bg-[#0D0D0D] p-1.5 rounded-full border border-[#222] shadow-xl hover:border-[#444] transition-all">
+          <span className="text-[9px] text-[#777] font-mono pl-2 hidden sm:group-hover:inline">Test Android Telephony:</span>
+          {['Priya', 'Boss', 'Mom'].map((caller) => (
+            <button
+              key={caller}
+              onClick={() => (window as any).simulateIncomingCall?.(caller)}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-full text-[#CCC] hover:text-white transition-all active:scale-95"
+              style={{ backgroundColor: `${theme.primary}1A`, color: theme.primary }}
+              title={`Simulate incoming call from ${caller}`}
+            >
+              📞 {caller}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ===== Production-Level Footer ===== */}

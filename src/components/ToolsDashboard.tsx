@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+/* ─────────────────── Props & Types ─────────────────── */
 interface ToolsDashboardProps {
   open: boolean;
   accentColor: string;
@@ -7,994 +8,1083 @@ interface ToolsDashboardProps {
   lang: 'en' | 'hi';
 }
 
-// ===== TYPES =====
-interface IpLocation {
-  city: string;
-  region: string;
-  country: string;
-  lat: number;
-  lon: number;
-  timezone: string;
-  isp: string;
+interface IpData {
+  ip: string; city: string; region: string; country: string;
+  lat: number; lon: number; timezone: string; isp: string;
 }
-
-interface CurrencyRate {
-  code: string;
-  name: string;
-  rate: number;
+interface CurrencyRate { code: string; name: string; rate: number; }
+interface SportMatch {
+  id: string; league: string; home: string; away: string;
+  homeScore: string; awayScore: string; status: string; date: string;
 }
+interface NewsItem { title: string; desc: string; url: string; source: string; time: string; }
+interface User { name: string; username: string; email: string; phone: string; address: string; avatar: string; }
+interface University { name: string; country: string; web_pages: string[]; }
+interface Paper { display_name: string; publication_year: number; cited_by_count: number; doi?: string; landing?: string; }
+interface DictEntry { word: string; phonetic?: string; meanings: { partOfSpeech: string; definitions: { definition: string; example?: string }[] }[]; }
+interface MovieCard { id: string; title: string; year: string; type: string; poster: string; }
+interface TransitStop { id: string; name: string; type: string; lat?: number; lon?: number; }
+interface TriviaQ { category: string; question: string; correct_answer: string; incorrect_answers: string[]; }
+interface NasaApod { title: string; url: string; explanation: string; media_type: string; date: string; }
+interface Country { name: string; official: string; capital: string; region: string; pop: string; area: string; langs: string; curr: string; flag: string; maps: string; }
 
-interface SportsMatch {
-  id: number;
-  sport: string;
-  league: string;
-  homeTeam: string;
-  awayTeam: string;
-  homeScore: number;
-  awayScore: number;
-  status: string;
-  date: string;
-}
+type ToolKey = 'ip' | 'currency' | 'sports' | 'news' | 'user' | 'colors' | 'university' | 'research' |
+  'dictionary' | 'movies' | 'transit' | 'devai' | 'math' | 'trivia' | 'nasa' | 'music' |
+  'recipes' | 'cocktails' | 'poetry' | 'countries' | 'github';
 
-interface NewsArticle {
-  title: string;
-  description: string;
-  url: string;
-  source: string;
-  publishedAt: string;
-}
+const TOOL_TABS: { key: ToolKey; icon: string; label: string; category: string }[] = [
+  { key: 'ip',         icon: '🌐', label: 'IP',       category: 'Network'   },
+  { key: 'currency',   icon: '💱', label: 'Money',    category: 'Finance'   },
+  { key: 'sports',     icon: '⚽', label: 'Sports',   category: 'Live'      },
+  { key: 'news',       icon: '📰', label: 'News',     category: 'Media'     },
+  { key: 'user',       icon: '🆔', label: 'User',     category: 'Dev'       },
+  { key: 'colors',     icon: '🎨', label: 'Colors',   category: 'Design'    },
+  { key: 'university', icon: '🎓', label: 'Uni',      category: 'Education' },
+  { key: 'research',   icon: '📊', label: 'Papers',   category: 'Academic'  },
+  { key: 'dictionary', icon: '📚', label: 'Dict',     category: 'Language'  },
+  { key: 'movies',     icon: '🎬', label: 'Movies',   category: 'Media'     },
+  { key: 'transit',    icon: '🚌', label: 'Transit',  category: 'Travel'    },
+  { key: 'devai',      icon: '🤖', label: 'DevAI',    category: 'AI'        },
+  { key: 'math',       icon: '🧮', label: 'Math',     category: 'Tools'     },
+  { key: 'trivia',     icon: '❓', label: 'Quiz',     category: 'Fun'       },
+  { key: 'nasa',       icon: '🚀', label: 'NASA',     category: 'Science'   },
+  { key: 'music',      icon: '🎵', label: 'Music',    category: 'Art'       },
+  { key: 'recipes',    icon: '🍲', label: 'Food',     category: 'Life'      },
+  { key: 'cocktails',  icon: '🍹', label: 'Drinks',   category: 'Life'      },
+  { key: 'poetry',     icon: '📜', label: 'Poetry',   category: 'Art'       },
+  { key: 'countries',  icon: '🌍', label: 'World',    category: 'Info'      },
+  { key: 'github',     icon: '💻', label: 'GitHub',   category: 'Dev'       },
+];
 
-interface RandomUser {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  username: string;
-  avatar: string;
-}
+const CURRENCIES: Record<string, string> = {
+  USD: 'US Dollar', INR: 'Indian Rupee', EUR: 'Euro', GBP: 'British Pound',
+  JPY: 'Japanese Yen', CNY: 'Chinese Yuan', AUD: 'Australian Dollar', CAD: 'Canadian Dollar',
+  CHF: 'Swiss Franc', SGD: 'Singapore Dollar', AED: 'UAE Dirham', SAR: 'Saudi Riyal',
+  KRW: 'South Korean Won', BRL: 'Brazilian Real', ZAR: 'South African Rand', THB: 'Thai Baht',
+};
 
-interface ColorSet {
-  colors: string[];
-  name: string;
-}
+const FALLBACK_NEWS: NewsItem[] = [
+  { title: 'Tech advances reshape daily life', desc: 'New AI tools transform how people work globally.', url: '#', source: 'Tech Today', time: 'Now' },
+  { title: 'Global climate deal reached', desc: 'World leaders commit to new carbon targets.', url: '#', source: 'World News', time: 'Now' },
+  { title: 'New Mars mission announced', desc: 'International agencies reveal space plans.', url: '#', source: 'Science Daily', time: 'Now' },
+];
+const FALLBACK_SPORTS: SportMatch[] = [
+  { id: '1', league: 'Premier League', home: 'Arsenal', away: 'Chelsea', homeScore: '2', awayScore: '1', status: '🟡 Sample', date: 'API fallback' },
+  { id: '2', league: 'IPL', home: 'Mumbai Indians', away: 'CSK', homeScore: '185', awayScore: '142', status: '🔴 Finished', date: 'API fallback' },
+  { id: '3', league: 'NBA', home: 'Lakers', away: 'Warriors', homeScore: '112', awayScore: '108', status: '🟢 Q4', date: 'API fallback' },
+];
 
-interface MusicArtist {
-  name: string;
-  genre: string;
-  albums: number;
-  popularSongs: string[];
-  image: string;
-  summary: string;
-}
-
-interface University {
-  name: string;
-  country: string;
-  web_pages: string[];
-}
-
-interface ResearchPaper {
-  id: string;
-  title: string;
-  publication_year: number;
-  display_name: string;
-  doi: string;
-}
-
-interface DictionaryDef {
-  word: string;
-  phonetic: string;
-  meanings: any[];
-}
-
-interface TriviaQuestion {
-  category: string;
-  question: string;
-  correct_answer: string;
-  incorrect_answers: string[];
-}
-
-// ===== HELPER: Safe fetch wrapper =====
+/* ─────────────────── API helpers ─────────────────── */
 async function safeFetch(url: string, opts?: RequestInit): Promise<any> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const ctrl = new AbortController();
+  const tid = window.setTimeout(() => ctrl.abort(), 10000);
   try {
-    const res = await fetch(url, { ...opts, signal: controller.signal });
-    clearTimeout(timeout);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(url, { ...opts, signal: ctrl.signal });
+    window.clearTimeout(tid);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${url.split('?')[0]}`);
     return await res.json();
-  } catch (e: any) {
-    clearTimeout(timeout);
-    throw e;
+  } catch (err) {
+    window.clearTimeout(tid);
+    throw err;
   }
 }
 
-// ===== TOOL 1: IP LOCATION (ip-api.com - FREE, no key) =====
-async function fetchIpLocation(): Promise<IpLocation> {
-  const data = await safeFetch('https://ipapi.co/json/');
-  return {
-    city: data.city || data.ip || 'Unknown',
-    region: data.region || data.region_code || '',
-    country: data.country_name || data.country || 'Unknown',
-    lat: data.latitude || data.lat || 0,
-    lon: data.longitude || data.lon || 0,
-    timezone: data.timezone || data.utc_offset || 'UTC',
-    isp: data.org || data.isp || '',
-  };
+function stripHtml(html: string) { return html.replace(/<[^>]+>/g, ''); }
+function decodeHtml(text: string) {
+  if (typeof document === 'undefined') return text;
+  const el = document.createElement('div'); el.innerHTML = text; return el.textContent || text;
+}
+function hsv2hex(h: number, s: number, l: number) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => { const k = (n + h / 30) % 12; return Math.round((l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255); };
+  return `#${[f(0), f(8), f(4)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+function generatePalette(): string[] {
+  const base = Math.floor(Math.random() * 360);
+  const angles = [0, 30, 60, 210, 300];
+  return angles.map(offset => hsv2hex((base + offset) % 360, 65 + Math.random() * 20, 40 + Math.random() * 25));
+}
+function evalMath(expr: string): string {
+  const clean = expr.trim();
+  if (!/^[0-9+\-*/().%\s^]+$/.test(clean)) throw new Error('Use numbers and operators only: + - * / ^ ( ) %');
+  const normalized = clean.replace(/\^/g, '**').replace(/(\d+)%/g, '($1/100)');
+  // eslint-disable-next-line no-new-func
+  const result = Function(`"use strict"; return (${normalized})`)();
+  if (typeof result !== 'number' || !Number.isFinite(result)) throw new Error('Invalid expression');
+  return Number(result.toFixed(10)).toLocaleString(undefined, { maximumSignificantDigits: 10 });
+}
+function readAloud(text: string) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/[\p{Extended_Pictographic}\u{1F300}-\u{1FAFF}]/gu, '').replace(/\s+/g, ' ').trim();
+  const u = new SpeechSynthesisUtterance(clean);
+  u.rate = 0.92; u.pitch = 1.02;
+  window.speechSynthesis.speak(u);
 }
 
-// ===== TOOL 2: CURRENCY CONVERTER (exchangerate-api - FREE tier) =====
-async function fetchCurrencyRates(base: string = 'USD'): Promise<CurrencyRate[]> {
-  const data = await safeFetch(`https://open.er-api.com/v6/latest/${base}`);
-  const rates: CurrencyRate[] = [];
-  const currencies: Record<string, string> = {
-    INR: 'Indian Rupee', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen',
-    CNY: 'Chinese Yuan', AUD: 'Australian Dollar', CAD: 'Canadian Dollar',
-    CHF: 'Swiss Franc', SGD: 'Singapore Dollar', HKD: 'Hong Kong Dollar',
-    NZD: 'New Zealand Dollar', ZAR: 'South African Rand', BRL: 'Brazilian Real',
-    KRW: 'South Korean Won', AED: 'UAE Dirham', SAR: 'Saudi Riyal', THB: 'Thai Baht',
-  };
-  for (const [code, name] of Object.entries(currencies)) {
-    if (data.rates?.[code]) {
-      rates.push({ code, name, rate: data.rates[code] });
-    }
-  }
-  return rates.sort((a, b) => a.code.localeCompare(b.code));
+/* ─────────────────── Sub-components ─────────────────── */
+function Spinner() {
+  return (
+    <div className="py-10 flex flex-col items-center gap-3">
+      <div className="w-8 h-8 border-2 border-[#333] border-t-current rounded-full animate-spin" />
+      <p className="text-xs text-[#666] font-mono">Fetching data...</p>
+    </div>
+  );
 }
 
-// ===== TOOL 3: LIVE SPORTS (api-football v1 - FREE tier) =====
-async function fetchLiveScores(): Promise<SportsMatch[]> {
-  try {
-    const res = await fetch('https://api-football-v1.p.rapidapi.com/v3/fixtures?live=all', {
-      method: 'GET' as const,
-      headers: {
-        'X-RapidAPI-Key': '4a8e3b2c1dmsh1234567890abcdef',
-        'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com',
-      },
-    });
-    if (!res.ok) throw new Error('Sports API unavailable');
-    const data = await res.json();
-    if (!data?.response) throw new Error('No live matches');
-    return data.response.slice(0, 8).map((m: any) => ({
-      id: m?.fixture?.id ?? Date.now(),
-      sport: 'Football',
-      league: m?.league?.name ?? 'Unknown League',
-      homeTeam: m?.teams?.home?.name ?? 'Home',
-      awayTeam: m?.teams?.away?.name ?? 'Away',
-      homeScore: m?.goals?.home ?? 0,
-      awayScore: m?.goals?.away ?? 0,
-      status: m?.fixture?.status?.short ?? 'Live',
-      date: m?.fixture?.date ?? '',
-    }));
-  } catch {
-    return [];
-  }
+function ErrBox({ msg }: { msg: string }) {
+  return (
+    <div className="bg-[#1A0000] border border-[#FF174455] rounded-xl p-3.5 flex items-start gap-2.5">
+      <span className="text-lg">⚠️</span>
+      <div>
+        <p className="text-xs font-bold text-[#FF6D6D]">Something went wrong</p>
+        <p className="text-[11px] text-[#CC5555] mt-0.5">{msg}</p>
+      </div>
+    </div>
+  );
 }
 
-// Fallback: simulated live scores if API fails
-function getFallbackScores(): SportsMatch[] {
-  return [
-    { id: 1, sport: 'Football', league: 'Premier League', homeTeam: 'Arsenal', awayTeam: 'Chelsea', homeScore: 2, awayScore: 1, status: 'Live 67\'', date: '2025-01-15' },
-    { id: 2, sport: 'Football', league: 'La Liga', homeTeam: 'Barcelona', awayTeam: 'Real Madrid', homeScore: 1, awayScore: 1, status: 'Live 45\'', date: '2025-01-15' },
-    { id: 3, sport: 'Football', league: 'Serie A', homeTeam: 'AC Milan', awayTeam: 'Inter Milan', homeScore: 0, awayScore: 2, status: 'HT', date: '2025-01-15' },
-    { id: 4, sport: 'Cricket', league: 'IPL 2025', homeTeam: 'Mumbai Indians', awayTeam: 'Chennai Super Kings', homeScore: 185, awayScore: 142, status: 'MI won by 43 runs', date: '2025-01-14' },
-    { id: 5, sport: 'Basketball', league: 'NBA', homeTeam: 'LA Lakers', awayTeam: 'Golden State', homeScore: 112, awayScore: 108, status: 'Q4 2:30', date: '2025-01-15' },
-    { id: 6, sport: 'Football', league: 'Bundesliga', homeTeam: 'Bayern Munich', awayTeam: 'Dortmund', homeScore: 3, awayScore: 0, status: 'FT', date: '2025-01-14' },
-  ];
+function Empty({ msg = 'Search or click the button to load data.' }: { msg?: string }) {
+  return <p className="text-xs text-[#666] text-center py-8">{msg}</p>;
 }
 
-// ===== TOOL 4: NEWS HEADLINES (NewsAPI FREE alternative - gnews) =====
-async function fetchNews(country: string = 'in', category: string = 'general'): Promise<NewsArticle[]> {
-  // Primary: gnews
-  try {
-    const data = await safeFetch(
-      `https://gnews.io/api/v4/top-headlines?country=${country}&category=${category}&lang=en&max=8&apikey=`,
-      {}
-    );
-    if (Array.isArray(data?.articles) && data.articles.length > 0) {
-      return data.articles.slice(0, 8).map((a: any) => ({
-        title: a?.title ?? 'Untitled',
-        description: a?.description ?? '',
-        url: a?.url ?? '#',
-        source: a?.source?.name ?? 'News',
-        publishedAt: a?.publishedAt ?? '',
-      }));
-    }
-  } catch {
-    // silent
-  }
-
-  // Fallback: BBC RSS via rss2json
-  try {
-    const rss = await safeFetch(
-      'https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml'
-    );
-    if (Array.isArray(rss?.items) && rss.items.length > 0) {
-      return rss.items.slice(0, 8).map((item: any) => ({
-        title: item?.title ?? 'Untitled',
-        description: (item?.description ?? '').replace(/<[^>]*>/g, '').slice(0, 120) + '...',
-        url: item?.link ?? '#',
-        source: 'BBC World',
-        publishedAt: item?.pubDate ?? '',
-      }));
-    }
-  } catch {
-    // silent
-  }
-
-  // Final fallback
-  return [
-    { title: 'Technology advances reshape daily life', description: 'New AI tools are transforming how people work and communicate globally.', url: '#', source: 'Tech Today', publishedAt: '2 hours ago' },
-    { title: 'Global climate summit reaches historic agreement', description: 'World leaders commit to ambitious new carbon reduction targets for 2030.', url: '#', source: 'World News', publishedAt: '3 hours ago' },
-    { title: 'Space exploration: New Mars mission announced', description: 'International space agency reveals plans for crewed Mars expedition by 2035.', url: '#', source: 'Science Daily', publishedAt: '5 hours ago' },
-    { title: 'Stock markets hit record highs amid optimism', description: 'Global indices surge as economic indicators show strong growth across sectors.', url: '#', source: 'Finance Wire', publishedAt: '6 hours ago' },
-    { title: 'Healthcare breakthrough in cancer treatment', description: 'New immunotherapy approach shows 90% success rate in clinical trials.', url: '#', source: 'Health Report', publishedAt: '8 hours ago' },
-  ];
+function Tag({ children, color = '#555' }: { children: React.ReactNode; color?: string }) {
+  return <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-mono" style={{ backgroundColor: color + '22', color }}>{children}</span>;
 }
 
-// ===== TOOL 5: RANDOM USER (randomuser.me - FREE) =====
-async function fetchRandomUser(): Promise<RandomUser> {
-  const data = await safeFetch('https://randomuser.me/api/');
-  const u = data.results[0];
-  return {
-    name: `${u.name.first} ${u.name.last}`,
-    email: u.email,
-    phone: u.phone,
-    address: `${u.location.street.number} ${u.location.street.name}, ${u.location.city}, ${u.location.country}`,
-    username: u.login.username,
-    avatar: u.picture.large,
-  };
+function RowKV({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex justify-between items-center gap-4 py-1.5 border-b border-[#1C1C1C] last:border-0">
+      <span className="text-[10px] text-[#666] font-mono uppercase tracking-wider shrink-0">{label}</span>
+      <span className="text-xs text-white font-medium text-right break-all">{value || '—'}</span>
+    </div>
+  );
 }
 
-// ===== TOOL 6: COLOR PALETTE (coolors API - FREE) =====
-async function fetchColorPalette(): Promise<ColorSet> {
-  try {
-    const data = await safeFetch('https://coolors.co/generate');
-    if (data?.colors) {
-      return {
-        colors: data.colors,
-        name: 'AI Generated',
-      };
-    }
-  } catch {
-    // Generate random palette locally
-  }
-  // Local fallback: generate random harmonious colors
-  const hue = Math.floor(Math.random() * 360);
-  const colors = Array.from({ length: 5 }, (_, i) => {
-    const h = (hue + i * 72) % 360;
-    const s = 50 + Math.floor(Math.random() * 40);
-    const l = 35 + Math.floor(Math.random() * 30);
-    return `hsl(${h}, ${s}%, ${l}%)`;
-  });
-  return { colors, name: 'Random Harmony' };
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={`bg-[#0E0E0E] border border-[#1E1E1E] rounded-xl p-3.5 ${className}`}>{children}</div>;
 }
 
-// ===== TOOL 7: MUSIC DATA (Wikipedia API - FREE) =====
-async function fetchMusicArtist(artistName: string): Promise<MusicArtist | null> {
-  try {
-    const search = await safeFetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(artistName + ' musician')}&format=json&origin=*&srlimit=1`);
-    if (search?.query?.search?.[0]) {
-      const title = search.query.search[0].title;
-      const wiki = await safeFetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=extracts&exintro=1&explaintext=1&format=json&origin=*`);
-      const pages = wiki.query?.pages;
-      if (pages) {
-        const pageId = Object.keys(pages)[0];
-        if (pageId !== '-1') {
-          return {
-            name: title,
-            genre: 'Various',
-            albums: 0,
-            popularSongs: [],
-            image: '',
-            summary: pages[pageId].extract?.slice(0, 300) + '...' || 'No summary available.',
-          };
-        }
+function PillBar({ items, active, onChange, accent }: {
+  items: string[]; active: string; onChange: (v: string) => void; accent: string;
+}) {
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {items.map(item => (
+        <button
+          key={item}
+          onClick={() => onChange(item)}
+          className="mini-chip capitalize"
+          style={active === item ? { borderColor: accent, color: accent, background: accent + '18' } : {}}
+        >
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CardItems({ items }: { items: { title: string; sub?: string; url?: string; badge?: string }[] }) {
+  if (!items.length) return <Empty />;
+  return (
+    <div className="space-y-2">
+      {items.map((item, i) => (
+        <div key={`${item.title}-${i}`} className="bg-[#0E0E0E] border border-[#1E1E1E] rounded-xl p-3 group hover:border-[#333] transition-colors">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs text-white font-semibold leading-snug flex-1">{item.title}</p>
+            {item.badge && <span className="text-[9px] bg-[#222] text-[#888] px-1.5 py-0.5 rounded font-mono shrink-0">{item.badge}</span>}
+          </div>
+          {item.sub && <p className="text-[10px] text-[#666] mt-1">{item.sub}</p>}
+          {item.url && item.url !== '#' && (
+            <a href={item.url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-0.5">
+              Open <span className="text-[9px]">↗</span>
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActionBtn({ onClick, disabled, children, color, variant = 'solid' }: {
+  onClick: () => void; disabled?: boolean; children: React.ReactNode; color: string; variant?: 'solid' | 'outline';
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+      style={variant === 'solid'
+        ? { backgroundColor: color, color: '#000' }
+        : { borderWidth: 1, borderColor: color, color, background: color + '10' }
       }
-    }
-  } catch {
-    // silent
-  }
-  // Final fallback: return basic info
-  return {
-    name: artistName,
-    genre: 'Music',
-    albums: 0,
-    popularSongs: [],
-    image: '',
-    summary: `Artist: ${artistName}. Search Wikipedia for detailed info.`,
-  };
+    >
+      {children}
+    </button>
+  );
 }
 
-// Popular artists for quick select
-const POPULAR_ARTISTS = ['Taylor Swift', 'BTS', 'Drake', 'Arijit Singh', 'The Weeknd', 'Ed Sheeran', 'Bad Bunny', 'Dua Lipa'];
-
-// ===== NEW TOOLS APIS =====
-async function fetchUniversities(name: string): Promise<University[]> {
-  const data = await safeFetch(`https://universities.hipolabs.com/search?name=${encodeURIComponent(name)}`);
-  return data.slice(0, 10);
+function SearchBox({ value, setValue, onSearch, placeholder, accent, label }: {
+  value: string; setValue: (v: string) => void; onSearch: () => void;
+  placeholder: string; accent: string; label?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {label && <p className="text-[10px] text-[#666] font-mono uppercase">{label}</p>}
+      <div className="flex gap-2">
+        <input
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && onSearch()}
+          placeholder={placeholder}
+          className="tool-input flex-1"
+        />
+        <button
+          onClick={onSearch}
+          className="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0"
+          style={{ backgroundColor: accent, color: '#000' }}
+        >
+          Search
+        </button>
+      </div>
+    </div>
+  );
 }
 
-async function fetchResearch(query: string): Promise<ResearchPaper[]> {
-  const data = await safeFetch(`https://api.openalex.org/works?search=${encodeURIComponent(query)}`);
-  return data.results.slice(0, 8);
+function SectionHeader({ icon, title, onRead }: { icon: string; title: string; onRead?: () => void }) {
+  return (
+    <div className="flex items-center justify-between pb-1">
+      <h3 className="text-white font-black text-sm flex items-center gap-2">
+        <span className="text-base">{icon}</span>{title}
+      </h3>
+      {onRead && (
+        <button onClick={onRead} className="mini-chip text-[9px] gap-1">🔊 Listen</button>
+      )}
+    </div>
+  );
 }
 
-async function fetchDictionary(word: string): Promise<DictionaryDef[]> {
-  return await safeFetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
-}
-
-async function fetchTrivia(): Promise<TriviaQuestion[]> {
-  const data = await safeFetch(`https://opentdb.com/api.php?amount=1&type=multiple`);
-  return data.results;
-}
-
-async function fetchNasaAPOD(): Promise<{url: string, title: string, explanation: string}> {
-  const data = await safeFetch(`https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY`);
-  return data;
-}
-
-// ===== MAIN COMPONENT =====
+/* ─────────────────── Main Component ─────────────────── */
 export default function ToolsDashboard({ open, accentColor, onClose, lang }: ToolsDashboardProps) {
-  const [activeTool, setActiveTool] = useState<string>('ip');
+  const [activeTool, setActiveTool] = useState<ToolKey>('ip');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // ===== NEW STATES =====
-  const [uniSearch, setUniSearch] = useState('');
+  const [ipData, setIpData] = useState<IpData | null>(null);
+  const [rates, setRates] = useState<CurrencyRate[]>([]);
+  const [amount, setAmount] = useState('1');
+  const [fromCur, setFromCur] = useState('USD');
+  const [toCur, setToCur] = useState('INR');
+  const [sports, setSports] = useState<SportMatch[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsCat, setNewsCat] = useState('world');
+  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [palette, setPalette] = useState<string[]>(generatePalette);
+  const [uniQ, setUniQ] = useState('IIT');
   const [unis, setUnis] = useState<University[]>([]);
-  const [researchSearch, setResearchSearch] = useState('');
-  const [papers, setPapers] = useState<ResearchPaper[]>([]);
-  const [dictSearch, setDictSearch] = useState('');
-  const [definitions, setDefinitions] = useState<DictionaryDef[]>([]);
-  const [trivia, setTrivia] = useState<TriviaQuestion | null>(null);
-  const [nasa, setNasa] = useState<{url: string, title: string, explanation: string} | null>(null);
-  const [loadingNew, setLoadingNew] = useState(false);
+  const [paperQ, setPaperQ] = useState('machine learning');
+  const [papers, setPapers] = useState<Paper[]>([]);
+  const [wordQ, setWordQ] = useState('serendipity');
+  const [dictEntries, setDictEntries] = useState<DictEntry[]>([]);
+  const [dictSimple, setDictSimple] = useState('');
+  const [movieQ, setMovieQ] = useState('Avengers');
+  const [movies, setMovies] = useState<MovieCard[]>([]);
+  const [transitQ, setTransitQ] = useState('Berlin Hbf');
+  const [stops, setStops] = useState<TransitStop[]>([]);
+  const [devPrompt, setDevPrompt] = useState('Write a Python function to check if a number is prime');
+  const [devResult, setDevResult] = useState('');
+  const [mathExpr, setMathExpr] = useState('(100 + 200) * 3 / 15');
+  const [mathResult, setMathResult] = useState('');
+  const [trivia, setTrivia] = useState<TriviaQ | null>(null);
+  const [triviaAns, setTriviaAns] = useState(false);
+  const [nasa, setNasa] = useState<NasaApod | null>(null);
+  const [artistQ, setArtistQ] = useState('Arijit Singh');
+  const [artistInfo, setArtistInfo] = useState<{ name: string; summary: string; url: string } | null>(null);
+  const [recipeQ, setRecipeQ] = useState('chicken');
+  const [recipes, setRecipes] = useState<any[]>([]);
+  const [cocktailQ, setCocktailQ] = useState('margarita');
+  const [cocktails, setCocktails] = useState<any[]>([]);
+  const [poems, setPoems] = useState<any[]>([]);
+  const [countryQ, setCountryQ] = useState('India');
+  const [country, setCountry] = useState<Country | null>(null);
+  const [ghQ, setGhQ] = useState('react');
+  const [ghRepos, setGhRepos] = useState<any[]>([]);
 
-  // ===== IP LOCATION STATE =====
-  const [ipData, setIpData] = useState<IpLocation | null>(null);
-  const [ipLoading, setIpLoading] = useState(false);
-  const [ipError, setIpError] = useState('');
+  const converted = useMemo(() => {
+    const fr = rates.find(r => r.code === fromCur)?.rate;
+    const tr = rates.find(r => r.code === toCur)?.rate;
+    const n = parseFloat(amount);
+    if (!fr || !tr || isNaN(n)) return '—';
+    return ((n / fr) * tr).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  }, [rates, fromCur, toCur, amount]);
 
-  // ===== CURRENCY STATE =====
-  const [currencies, setCurrencies] = useState<CurrencyRate[]>([]);
-  const [currencyLoading, setCurrencyLoading] = useState(false);
-  const [currencyError, setCurrencyError] = useState('');
-  const [convertFrom, setConvertFrom] = useState('USD');
-  const [convertTo, setConvertTo] = useState('INR');
-  const [convertAmount, setConvertAmount] = useState('1');
-
-  // ===== SPORTS STATE =====
-  const [sports, setSports] = useState<SportsMatch[]>([]);
-  const [sportsLoading, setSportsLoading] = useState(false);
-  const [sportsError, setSportsError] = useState('');
-
-  // ===== NEWS STATE =====
-  const [news, setNews] = useState<NewsArticle[]>([]);
-  const [newsLoading, setNewsLoading] = useState(false);
-  const [newsCategory, setNewsCategory] = useState('general');
-  const [newsError, setNewsError] = useState('');
-
-  // ===== USER STATE =====
-  const [user, setUser] = useState<RandomUser | null>(null);
-  const [userLoading, setUserLoading] = useState(false);
-
-  // ===== COLOR STATE =====
-  const [colorPalette, setColorPalette] = useState<ColorSet | null>(null);
-  const [colorLoading, setColorLoading] = useState(false);
-
-  // ===== MUSIC STATE =====
-  const [music, setMusic] = useState<MusicArtist | null>(null);
-  const [musicLoading, setMusicLoading] = useState(false);
-  const [musicError, setMusicError] = useState('');
-  const [musicSearch, setMusicSearch] = useState('');
-
-  // ===== FETCH FUNCTIONS =====
-  const loadIp = useCallback(async () => {
-    setIpLoading(true); setIpError('');
-    try { setIpData(await fetchIpLocation()); } catch (e: any) { setIpError(e.message); }
-    finally { setIpLoading(false); }
+  const run = useCallback(async (task: () => Promise<void>) => {
+    setLoading(true); setError('');
+    try { await task(); }
+    catch (e: any) { setError(e?.message || 'Network error. Try again.'); }
+    finally { setLoading(false); }
   }, []);
 
-  const loadCurrencies = useCallback(async () => {
-    setCurrencyLoading(true); setCurrencyError('');
-    try { setCurrencies(await fetchCurrencyRates(convertFrom)); } catch (e: any) { setCurrencyError(e.message); }
-    finally { setCurrencyLoading(false); }
-  }, [convertFrom]);
+  /* ─── API loaders ─── */
+  const loadIp = useCallback(() => run(async () => {
+    const tryFetch = async (url: string, map: (d: any) => IpData) => { const d = await safeFetch(url); setIpData(map(d)); };
+    const tries = [
+      () => tryFetch('https://ipwho.is/', d => ({ ip: d.ip, city: d.city || '?', region: d.region || '', country: d.country || '?', lat: d.latitude || 0, lon: d.longitude || 0, timezone: d.timezone?.id || '', isp: d.connection?.isp || '' })),
+      () => tryFetch('https://ipapi.co/json/', d => ({ ip: d.ip, city: d.city || '?', region: d.region || '', country: d.country_name || '?', lat: d.latitude || 0, lon: d.longitude || 0, timezone: d.timezone || '', isp: d.org || '' })),
+      () => tryFetch('https://api.ipify.org?format=json', d => ({ ip: d.ip, city: '—', region: '—', country: '—', lat: 0, lon: 0, timezone: '—', isp: '—' })),
+    ];
+    for (const t of tries) { try { await t(); return; } catch { /* next */ } }
+    throw new Error('All IP APIs failed.');
+  }), [run]);
 
-  const loadSports = useCallback(async () => {
-    setSportsLoading(true); setSportsError('');
+  const loadCurrency = useCallback(() => run(async () => {
+    const data = await safeFetch(`https://open.er-api.com/v6/latest/${fromCur}`);
+    if (data.result !== 'success' && !data.rates) throw new Error('Exchange rate API unavailable.');
+    setRates(Object.entries(CURRENCIES).filter(([c]) => data.rates?.[c]).map(([code, name]) => ({ code, name, rate: data.rates[code] })));
+  }), [run, fromCur]);
+
+  const loadSports = useCallback(() => run(async () => {
     try {
-      const data = await fetchLiveScores();
-      setSports(data.length > 0 ? data : getFallbackScores());
-    } catch {
-      setSports(getFallbackScores());
-    }
-    finally { setSportsLoading(false); }
-  }, []);
+      const d = await safeFetch('https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php?id=4328');
+      const matches = (d.events || []).slice(0, 8).map((e: any) => ({
+        id: e.idEvent, league: e.strLeague || 'Football',
+        home: e.strHomeTeam, away: e.strAwayTeam,
+        homeScore: e.intHomeScore ?? '—', awayScore: e.intAwayScore ?? '—',
+        status: e.strStatus || 'Upcoming', date: `${e.dateEvent || ''} ${e.strTime || ''}`.trim(),
+      }));
+      setSports(matches.length ? matches : FALLBACK_SPORTS);
+    } catch { setSports(FALLBACK_SPORTS); }
+  }), [run]);
 
-  const loadNews = useCallback(async () => {
-    setNewsLoading(true); setNewsError('');
-    try { setNews(await fetchNews('in', newsCategory)); } catch { setNews([]); }
-    finally { setNewsLoading(false); }
-  }, [newsCategory]);
+  const loadNews = useCallback(() => run(async () => {
+    const feeds: Record<string, string> = {
+      world: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+      technology: 'https://feeds.bbci.co.uk/news/technology/rss.xml',
+      sports: 'https://feeds.bbci.co.uk/sport/rss.xml',
+      business: 'https://feeds.bbci.co.uk/news/business/rss.xml',
+      science: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml',
+    };
+    try {
+      const rss = await safeFetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feeds[newsCat] || feeds.world)}`);
+      const articles = (rss.items || []).slice(0, 10).map((item: any) => ({
+        title: item.title || 'Untitled',
+        desc: stripHtml(item.description || '').slice(0, 150),
+        url: item.link || '#',
+        source: rss.feed?.title || 'BBC',
+        time: item.pubDate ? new Date(item.pubDate).toLocaleDateString() : '',
+      }));
+      setNews(articles.length ? articles : FALLBACK_NEWS);
+    } catch { setNews(FALLBACK_NEWS); }
+  }), [run, newsCat]);
 
-  const loadUser = useCallback(async () => {
-    setUserLoading(true);
-    try { setUser(await fetchRandomUser()); } catch { /* silent */ }
-    finally { setUserLoading(false); }
-  }, []);
-
-  const loadColors = useCallback(async () => {
-    setColorLoading(true);
-    try { setColorPalette(await fetchColorPalette()); } catch {
-      const hue = Math.floor(Math.random() * 360);
-      setColorPalette({
-        colors: Array.from({ length: 5 }, (_, i) => {
-          const h = (hue + i * 72) % 360;
-          return `hsl(${h}, ${60 + i * 5}%, ${40 + i * 5}%)`;
-        }),
-        name: 'Local Random',
+  const loadUser = useCallback(() => run(async () => {
+    try {
+      const d = await safeFetch('https://randomuser.me/api/');
+      const p = d.results[0];
+      setUserProfile({
+        name: `${p.name.first} ${p.name.last}`, username: p.login.username,
+        email: p.email, phone: p.phone,
+        address: `${p.location.street.number} ${p.location.street.name}, ${p.location.city}, ${p.location.country}`,
+        avatar: p.picture.large,
       });
+    } catch {
+      const id = Math.random().toString(36).slice(2, 9);
+      setUserProfile({ name: `Test User ${id}`, username: `test_${id}`, email: `${id}@example.com`, phone: '+91 98765 43210', address: 'Mumbai, Maharashtra, India', avatar: `https://api.dicebear.com/8.x/personas/svg?seed=${id}` });
     }
-    finally { setColorLoading(false); }
-  }, []);
+  }), [run]);
 
-  const loadTrivia = useCallback(async () => {
-    setLoadingNew(true);
-    try { const res = await fetchTrivia(); setTrivia(res[0]); } catch { /* silent */ }
-    finally { setLoadingNew(false); }
-  }, []);
+  const loadUni = useCallback(() => run(async () => {
+    const data = await safeFetch(`https://universities.hipolabs.com/search?name=${encodeURIComponent(uniQ)}`);
+    if (!Array.isArray(data) || !data.length) throw new Error(`No universities found for "${uniQ}". Try: MIT, Oxford, IIT`);
+    setUnis(data.slice(0, 12));
+  }), [run, uniQ]);
 
-  const loadNasa = useCallback(async () => {
-    setLoadingNew(true);
-    try { setNasa(await fetchNasaAPOD()); } catch { /* silent */ }
-    finally { setLoadingNew(false); }
-  }, []);
+  const loadPapers = useCallback(() => run(async () => {
+    const data = await safeFetch(`https://api.openalex.org/works?search=${encodeURIComponent(paperQ)}&per-page=10&select=display_name,publication_year,cited_by_count,doi,primary_location`);
+    if (!data.results?.length) throw new Error('No papers found. Try: quantum computing, neural networks');
+    setPapers(data.results.map((p: any) => ({
+      display_name: p.display_name, publication_year: p.publication_year,
+      cited_by_count: p.cited_by_count, doi: p.doi,
+      landing: p.primary_location?.landing_page_url,
+    })));
+  }), [run, paperQ]);
 
-  // Auto-load on tool switch
+  const loadDict = useCallback(() => run(async () => {
+    setDictEntries([]); setDictSimple('');
+    const results = await Promise.allSettled([
+      safeFetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(wordQ)}`),
+      safeFetch(`https://dictionary-api-7hmy.onrender.com/define?word=${encodeURIComponent(wordQ)}`),
+    ]);
+    if (results[0].status === 'fulfilled') setDictEntries(results[0].value || []);
+    if (results[1].status === 'fulfilled') {
+      const s = results[1].value;
+      setDictSimple(s.definition || s.meaning || s.text || '');
+    }
+    if (results[0].status === 'rejected' && results[1].status === 'rejected') throw new Error(`Word "${wordQ}" not found.`);
+  }), [run, wordQ]);
+
+  const loadMovies = useCallback(() => run(async () => {
+    const data = await safeFetch(`https://imdb.iamidiotareyoutoo.com/search?q=${encodeURIComponent(movieQ)}`);
+    const list = data.description || data.results || (Array.isArray(data) ? data : []);
+    const mapped = (Array.isArray(list) ? list : []).slice(0, 12).map((m: any) => ({
+      id: m['#IMDB_ID'] || m.id || String(Math.random()),
+      title: m['#TITLE'] || m.title || 'Untitled',
+      year: String(m['#YEAR'] || m.year || ''),
+      type: m['#TYPE'] || m.type || 'Movie',
+      poster: m['#IMG_POSTER'] || m.image || '',
+    }));
+    if (!mapped.length) throw new Error('No movies found. Try: Avengers, Inception, RRR');
+    setMovies(mapped);
+  }), [run, movieQ]);
+
+  const loadTransit = useCallback(() => run(async () => {
+    const tries = [
+      () => safeFetch(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(transitQ)}&results=10`),
+      () => safeFetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(transitQ)}&format=json&limit=10`),
+    ];
+    for (const t of tries) {
+      try {
+        const data = await t();
+        const list = Array.isArray(data) ? data : [];
+        if (!list.length) continue;
+        setStops(list.slice(0, 10).map((item: any) => ({
+          id: item.id || item.place_id || item.name,
+          name: item.name || item.display_name || 'Unknown',
+          type: item.type || item.class || 'location',
+          lat: item.location?.latitude || parseFloat(item.lat) || undefined,
+          lon: item.location?.longitude || parseFloat(item.lon) || undefined,
+        })));
+        return;
+      } catch { /* next */ }
+    }
+    throw new Error('Transit API unavailable. Try cities like: Berlin, Mumbai, Tokyo');
+  }), [run, transitQ]);
+
+  const loadDevAI = useCallback((mode: 'generate' | 'fix' | 'user') => run(async () => {
+    setDevResult('');
+    if (mode === 'user') {
+      try {
+        const d = await safeFetch('https://devtoolbox-api.devtoolbox-api.workers.dev/random/user');
+        setDevResult(JSON.stringify(d, null, 2));
+      } catch {
+        const id = Math.random().toString(36).slice(2, 9);
+        setDevResult(JSON.stringify({ name: `Dev User ${id}`, email: `dev${id}@example.com`, username: `dev_${id}`, phone: `+91-9${id.slice(0,9)}`, job: 'Software Engineer' }, null, 2));
+      }
+      return;
+    }
+    const url = mode === 'generate'
+      ? 'https://devtoolbox-api.devtoolbox-api.workers.dev/ai/generate'
+      : 'https://devtoolbox-api.devtoolbox-api.workers.dev/ai/fix-code';
+    const body = mode === 'generate'
+      ? { prompt: devPrompt }
+      : { code: devPrompt, error: 'Auto-detect and fix all bugs' };
+    try {
+      const d = await safeFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      setDevResult(d.result || d.text || d.response || d.output || JSON.stringify(d, null, 2));
+    } catch {
+      setDevResult(`DevToolBox API is currently unavailable.\n\nTip: Use the main MYRA chat with your AI provider key for powerful code generation and debugging!`);
+    }
+  }), [run, devPrompt]);
+
+  const loadMath = useCallback(() => run(async () => {
+    setMathResult(evalMath(mathExpr));
+  }), [run, mathExpr]);
+
+  const loadTrivia = useCallback(() => run(async () => {
+    const d = await safeFetch('https://opentdb.com/api.php?amount=1&type=multiple');
+    if (!d.results?.[0]) throw new Error('Trivia API unavailable. Try again in a moment.');
+    setTrivia(d.results[0]); setTriviaAns(false);
+  }), [run]);
+
+  const loadNasa = useCallback(() => run(async () => {
+    const d = await safeFetch('https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY');
+    if (!d.url) throw new Error('NASA API unavailable.');
+    setNasa(d);
+  }), [run]);
+
+  const loadMusic = useCallback(() => run(async () => {
+    const search = await safeFetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(artistQ + ' musician')}&format=json&origin=*&srlimit=1`);
+    const title = search.query?.search?.[0]?.title;
+    if (!title) throw new Error('Artist not found. Try: Taylor Swift, AR Rahman, Coldplay');
+    const wiki = await safeFetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=extracts&exintro=1&explaintext=1&format=json&origin=*`);
+    const page = wiki.query?.pages?.[Object.keys(wiki.query.pages)[0]];
+    setArtistInfo({ name: title, summary: (page?.extract || '').slice(0, 500), url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}` });
+  }), [run, artistQ]);
+
+  const loadRecipes = useCallback(() => run(async () => {
+    const d = await safeFetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(recipeQ)}`);
+    if (!d.meals?.length) throw new Error(`No recipes for "${recipeQ}". Try: chicken, pasta, biryani, cake`);
+    setRecipes(d.meals.slice(0, 8));
+  }), [run, recipeQ]);
+
+  const loadCocktails = useCallback(() => run(async () => {
+    const d = await safeFetch(`https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(cocktailQ)}`);
+    if (!d.drinks?.length) throw new Error(`No cocktails for "${cocktailQ}". Try: mojito, margarita, martini`);
+    setCocktails(d.drinks.slice(0, 8));
+  }), [run, cocktailQ]);
+
+  const loadPoems = useCallback(() => run(async () => {
+    const d = await safeFetch('https://poetrydb.org/random/5');
+    if (!Array.isArray(d) || !d.length) throw new Error('Poetry API unavailable.');
+    setPoems(d.slice(0, 5));
+  }), [run]);
+
+  const loadCountry = useCallback(() => run(async () => {
+    const d = await safeFetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(countryQ)}`);
+    const c = d?.[0];
+    if (!c) throw new Error(`Country "${countryQ}" not found.`);
+    setCountry({
+      name: c.name?.common, official: c.name?.official, capital: c.capital?.[0] || '—',
+      region: `${c.region} / ${c.subregion || '—'}`, pop: c.population?.toLocaleString(),
+      area: c.area?.toLocaleString() + ' km²', langs: Object.values(c.languages || {}).join(', '),
+      curr: Object.values(c.currencies || {}).map((x: any) => `${x.name} (${x.symbol})`).join(', '),
+      flag: c.flags?.svg || c.flags?.png || '', maps: c.maps?.googleMaps || '',
+    });
+  }), [run, countryQ]);
+
+  const loadGitHub = useCallback(() => run(async () => {
+    const d = await safeFetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(ghQ)}&sort=stars&per_page=8`);
+    if (!d.items?.length) throw new Error('No repos found. Try: react, python, nextjs');
+    setGhRepos(d.items.slice(0, 8).map((r: any) => ({
+      name: r.full_name, desc: (r.description || '').slice(0, 100),
+      stars: r.stargazers_count, lang: r.language || 'Mixed',
+      forks: r.forks_count, url: r.html_url,
+    })));
+  }), [run, ghQ]);
+
+  // Auto-load on first switch
   useEffect(() => {
     if (!open) return;
-    switch (activeTool) {
-      case 'ip': loadIp(); break;
-      case 'currency': loadCurrencies(); break;
-      case 'sports': loadSports(); break;
-      case 'news': loadNews(); break;
-      case 'user': break;
-      case 'color': loadColors(); break;
-      case 'music': break;
-      case 'trivia': loadTrivia(); break;
-      case 'nasa': loadNasa(); break;
-    }
-  }, [activeTool, open, loadIp, loadCurrencies, loadSports, loadNews, loadColors, loadTrivia, loadNasa]);
-
-  // Convert calculation
-  const convertedValue = (() => {
-    const fromRate = currencies.find(c => c.code === convertFrom)?.rate;
-    const toRate = currencies.find(c => c.code === convertTo)?.rate;
-    if (!fromRate || !toRate || !convertAmount) return '—';
-    return ((parseFloat(convertAmount) / fromRate) * toRate).toFixed(2);
-  })();
-
-  // Music search handler
-  const searchMusic = useCallback(async () => {
-    if (!musicSearch.trim()) return;
-    setMusicLoading(true); setMusicError(''); setMusic(null);
-    try {
-      const result = await fetchMusicArtist(musicSearch.trim());
-      if (result) setMusic(result);
-      else setMusicError('Artist not found. Try: Taylor Swift, BTS, Drake...');
-    } catch (e: any) {
-      setMusicError(e.message);
-    }
-    finally { setMusicLoading(false); }
-  }, [musicSearch]);
+    if (activeTool === 'ip' && !ipData) loadIp();
+    if (activeTool === 'currency' && !rates.length) loadCurrency();
+    if (activeTool === 'sports' && !sports.length) loadSports();
+    if (activeTool === 'news' && !news.length) loadNews();
+    if (activeTool === 'trivia' && !trivia) loadTrivia();
+    if (activeTool === 'nasa' && !nasa) loadNasa();
+  }, [activeTool, open, ipData, rates.length, sports.length, news.length, trivia, nasa, loadIp, loadCurrency, loadSports, loadNews, loadTrivia, loadNasa]);
 
   if (!open) return null;
 
-  const toolTabs = [
-    { key: 'ip', icon: '🌐', label: 'IP' },
-    { key: 'currency', icon: '💱', label: 'Cash' },
-    { key: 'sports', icon: '⚽', label: 'Live' },
-    { key: 'news', icon: '📰', label: 'News' },
-    { key: 'user', icon: '🆔', label: 'User' },
-    { key: 'color', icon: '🎨', label: 'Art' },
-    { key: 'uni', icon: '🎓', label: 'Uni' },
-    { key: 'paper', icon: '📊', label: 'Study' },
-    { key: 'dict', icon: '📚', label: 'Dict' },
-    { key: 'trivia', icon: '❓', label: 'Quiz' },
-    { key: 'nasa', icon: '🚀', label: 'NASA' },
-    { key: 'music', icon: '🎵', label: 'Music' },
-    { key: 'calc', icon: '🧮', label: 'Calc' },
-  ];
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 flex justify-center items-start overflow-y-auto pt-6 pb-12 px-3 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex justify-center items-start overflow-y-auto p-3 pt-6 pb-12">
       <div
-        className="w-full max-w-md rounded-2xl border overflow-hidden my-2"
-        style={{
-          background: 'linear-gradient(145deg, #121212, #0D0D0D, #1A1A1A)',
-          borderColor: `${accentColor}44`,
-          boxShadow: `0 0 40px ${accentColor}15, 0 20px 60px rgba(0,0,0,0.8)`,
-        }}
+        className="w-full max-w-lg rounded-2xl border overflow-hidden shadow-2xl my-1"
+        style={{ background: '#0C0C0C', borderColor: accentColor + '40', boxShadow: `0 0 60px ${accentColor}18` }}
       >
-        {/* Header */}
-        <div className="px-5 pt-5 pb-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${accentColor}22` }}>
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4" style={{ borderBottom: `1px solid ${accentColor}18` }}>
           <div>
-            <h2 className="text-white font-black text-xl tracking-wider flex items-center gap-2">
-              <span className="text-2xl">🛠️</span> TOOLS
+            <h2 className="text-white font-black text-lg tracking-wider flex items-center gap-2">
+              <span className="text-xl">🛠️</span> TOOLS HUB
             </h2>
-            <p className="text-[10px] text-[#666] font-mono mt-0.5">
-              {lang === 'hi' ? '7 Free Tools · Bina key · Sab kuch ek jagah' : '7 Free Tools · No keys · All in one place'}
+            <p className="text-[10px] text-[#555] font-mono mt-0.5">
+              {lang === 'hi' ? '21 Free Tools · No login · Students ke liye' : '21 Free Tools · No login · Student-ready'}
             </p>
           </div>
-          <button onClick={onClose} className="text-[#888] hover:text-white p-1.5 rounded-lg hover:bg-[#1A1A1A] transition-colors">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#1A1A1A] hover:bg-[#252525] flex items-center justify-center transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
 
-        {/* Tool Tabs */}
-        <div className="flex px-2 pt-3 gap-1 overflow-x-auto hide-scrollbar pb-1">
-          {toolTabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTool(tab.key)}
-              className="flex-shrink-0 px-2.5 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"
-              style={{
-                background: activeTool === tab.key ? `${accentColor}22` : '#111',
-                color: activeTool === tab.key ? accentColor : '#666',
-                border: `1px solid ${activeTool === tab.key ? accentColor + '44' : '#222'}`,
-              }}
-            >
-              <span className="mr-1">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
+        {/* ── Scrollable Tab Bar ── */}
+        <div className="flex gap-1.5 px-3 pt-3 pb-2 overflow-x-auto hide-scrollbar">
+          {TOOL_TABS.map(tab => {
+            const active = activeTool === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => { setActiveTool(tab.key); setError(''); }}
+                className="flex-shrink-0 flex items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"
+                style={{
+                  background: active ? accentColor + '22' : '#141414',
+                  color: active ? accentColor : '#666',
+                  border: `1px solid ${active ? accentColor + '50' : '#1E1E1E'}`,
+                }}
+                title={tab.category}
+              >
+                <span className="text-sm">{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Content */}
-        <div className="p-4 space-y-3 min-h-[300px]">
+        {/* ── Content ── */}
+        <div className="p-4 space-y-4 max-h-[68vh] overflow-y-auto">
+          {loading && <Spinner />}
+          {error && !loading && <ErrBox msg={error} />}
 
-          {/* ===== IP LOCATION ===== */}
-          {activeTool === 'ip' && (
+          {/* 1. IP Location */}
+          {activeTool === 'ip' && !loading && (
             <div className="space-y-3">
-              <button onClick={loadIp} disabled={ipLoading}
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-black active:scale-95 transition-all"
-                style={{ background: 'linear-gradient(135deg, #00E5FF, #00B8D4)' }}>
-                {ipLoading ? '#ecting...' : '🌐 Detect My Location'}
-              </button>
-
+              <SectionHeader icon="🌐" title="IP Location" onRead={() => ipData && readAloud(`Your IP is ${ipData.ip}. You are in ${ipData.city}, ${ipData.country}.`)} />
+              <ActionBtn onClick={loadIp} color={accentColor}>🔍 Detect My Location</ActionBtn>
               {ipData && (
-                <div className="rounded-xl p-4 border space-y-2 animate-fadeIn" style={{ background: '#0E1A1A', borderColor: '#00E5FF33' }}>
-                  <div className="text-3xl text-center mb-2">📍</div>
-                  <div className="space-y-1.5">
-                    {[
-                      { label: lang === 'hi' ? 'Sheher' : 'City', value: ipData.city },
-                      { label: lang === 'hi' ? 'Desh' : 'Country', value: ipData.country },
-                      { label: lang === 'hi' ? 'Kshetra' : 'Region', value: ipData.region },
-                      { label: lang === 'hi' ? 'ISP' : 'ISP', value: ipData.isp },
-                      { label: lang === 'hi' ? 'Samay Kshetra' : 'Timezone', value: ipData.timezone },
-                      { label: lang === 'hi' ? 'Nirdeshank' : 'Coordinates', value: `${ipData.lat.toFixed(2)}°, ${ipData.lon.toFixed(2)}°` },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between py-1 border-b border-[#1A2A2A] last:border-0">
-                        <span className="text-[10px] text-[#00E5FF] font-mono uppercase">{item.label}</span>
-                        <span className="text-xs text-white font-semibold">{item.value}</span>
-                      </div>
-                    ))}
+                <Card>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-[#1A1A1A] flex items-center justify-center text-xl">🌍</div>
+                    <div><p className="text-white font-bold">{ipData.city}</p><p className="text-[#666] text-xs">{ipData.country}</p></div>
                   </div>
-                </div>
-              )}
-
-              {ipError && (
-                <div className="bg-[#1A0000] border border-[#FF1744] rounded-xl p-3 text-xs text-[#FF6D6D]">⚠️ {ipError}</div>
+                  {[['IP Address', ipData.ip], ['Region', ipData.region], ['ISP / Org', ipData.isp], ['Timezone', ipData.timezone], ['Coordinates', `${ipData.lat.toFixed(4)}, ${ipData.lon.toFixed(4)}`]].map(([k, v]) => <RowKV key={k} label={k} value={v} />)}
+                  {ipData.lat ? <a href={`https://maps.google.com/?q=${ipData.lat},${ipData.lon}`} target="_blank" rel="noreferrer" className="mt-2 text-[10px] text-blue-400 hover:underline inline-block">📍 Open in Google Maps ↗</a> : null}
+                </Card>
               )}
             </div>
           )}
 
-          {/* ===== CURRENCY CONVERTER ===== */}
-          {activeTool === 'currency' && (
+          {/* 2. Currency */}
+          {activeTool === 'currency' && !loading && (
             <div className="space-y-3">
-              <div className="rounded-xl p-4 border space-y-3" style={{ background: '#1A1A00', borderColor: '#FFE06633' }}>
-                {/* Amount Input */}
+              <SectionHeader icon="💱" title="Currency Converter" onRead={() => readAloud(`${amount} ${fromCur} equals ${converted} ${toCur}`)} />
+              <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="text-[10px] text-[#FFE066] font-mono uppercase block mb-1">Amount</label>
-                  <input
-                    type="number"
-                    value={convertAmount}
-                    onChange={e => setConvertAmount(e.target.value)}
-                    className="w-full bg-[#111] border border-[#333] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#FFE066]"
-                    placeholder="Enter amount..."
-                  />
+                  <p className="text-[10px] text-[#555] mb-1 font-mono">AMOUNT</p>
+                  <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="tool-input" placeholder="1" />
                 </div>
-
-                {/* From / To */}
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <label className="text-[10px] text-[#FFE066] font-mono uppercase block mb-1">From</label>
-                    <select value={convertFrom} onChange={e => setConvertFrom(e.target.value)}
-                      className="w-full bg-[#111] border border-[#333] rounded-lg px-2 py-2 text-white text-xs focus:outline-none"
-                      style={{ borderColor: '#FFE066' }}>
-                      {currencies.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
-                    </select>
-                  </div>
-                  <span className="text-[#888] pb-2 text-lg">→</span>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-[#FFE066] font-mono uppercase block mb-1">To</label>
-                    <select value={convertTo} onChange={e => setConvertTo(e.target.value)}
-                      className="w-full bg-[#111] border border-[#333] rounded-lg px-2 py-2 text-white text-xs focus:outline-none"
-                      style={{ borderColor: '#FFE066' }}>
-                      {currencies.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
-                    </select>
-                  </div>
+                <div>
+                  <p className="text-[10px] text-[#555] mb-1 font-mono">FROM</p>
+                  <select value={fromCur} onChange={e => setFromCur(e.target.value)} className="tool-input">
+                    {Object.entries(CURRENCIES).map(([c, n]) => <option key={c} value={c}>{c} — {n}</option>)}
+                  </select>
                 </div>
-
-                {/* Result */}
-                <div className="bg-[#0A0A00] rounded-lg p-3 text-center border border-[#FFE06633]">
-                  <p className="text-[10px] text-[#888] font-mono">{lang === 'hi' ? 'Parinaam' : 'Result'}</p>
-                  <p className="text-2xl font-black mt-1" style={{ color: '#FFE066' }}>
-                    {convertedValue}
-                  </p>
-                  <p className="text-[10px] text-[#666] font-mono">{convertTo}</p>
-                </div>
-
-                {/* Quick Rates */}
-                <div className="grid grid-cols-3 gap-1.5">
-                  {currencies.slice(0, 6).map(c => (
-                    <div key={c.code} className="bg-[#111] rounded-lg p-2 text-center border border-[#222]">
-                      <p className="text-[9px] text-[#FFE066] font-mono">{c.code}</p>
-                      <p className="text-[11px] text-white font-bold">{c.rate.toFixed(2)}</p>
-                    </div>
-                  ))}
+                <div>
+                  <p className="text-[10px] text-[#555] mb-1 font-mono">TO</p>
+                  <select value={toCur} onChange={e => setToCur(e.target.value)} className="tool-input">
+                    {Object.entries(CURRENCIES).map(([c, n]) => <option key={c} value={c}>{c} — {n}</option>)}
+                  </select>
                 </div>
               </div>
-
-              {currencyLoading && (
-                <div className="bg-[#111] rounded-xl p-4 text-center">
-                  <div className="text-2xl animate-spin inline-block">💱</div>
-                  <p className="text-xs text-[#888] mt-2 font-mono">{lang === 'hi' ? 'Rates load ho rahe hain...' : 'Loading rates...'}</p>
-                </div>
-              )}
-
-              {currencyError && (
-                <div className="bg-[#1A0000] border border-[#FF1744] rounded-xl p-3 text-xs text-[#FF6D6D]">⚠️ {currencyError}</div>
+              <ActionBtn onClick={loadCurrency} color={accentColor}>⟳ Refresh Live Rates</ActionBtn>
+              {rates.length > 0 && (
+                <Card>
+                  <p className="text-[10px] text-[#555] font-mono mb-2">RESULT</p>
+                  <p className="text-2xl font-black" style={{ color: accentColor }}>{converted} <span className="text-base text-[#888]">{toCur}</span></p>
+                  <p className="text-xs text-[#666] mt-1">{amount} {fromCur} = {converted} {toCur}</p>
+                  <div className="grid grid-cols-4 gap-1.5 mt-3 pt-3 border-t border-[#1A1A1A]">
+                    {rates.slice(0, 8).map(r => (
+                      <div key={r.code} className="bg-[#141414] rounded-lg p-1.5 text-center">
+                        <p className="text-[9px] text-[#777] font-mono">{r.code}</p>
+                        <p className="text-xs text-white font-bold">{r.rate.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
               )}
             </div>
           )}
 
-          {/* ===== LIVE SPORTS ===== */}
-          {activeTool === 'sports' && (
+          {/* 3. Sports */}
+          {activeTool === 'sports' && !loading && (
             <div className="space-y-3">
-              <button onClick={loadSports} disabled={sportsLoading}
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-black active:scale-95 transition-all"
-                style={{ background: 'linear-gradient(135deg, #00E676, #00C853)' }}>
-                {sportsLoading ? '#ading...' : '⚽ Load Live Scores'}
-              </button>
+              <SectionHeader icon="⚽" title="Sports Scores" />
+              <ActionBtn onClick={loadSports} color={accentColor}>🔄 Load Latest Scores</ActionBtn>
+              {sports.length > 0 && sports.map(m => (
+                <Card key={m.id}>
+                  <div className="flex items-center justify-between mb-2">
+                    <Tag color="#10A37F">{m.league}</Tag>
+                    <Tag color={m.status.includes('Live') || m.status.includes('Q') ? '#FF1744' : '#888'}>{m.status}</Tag>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-white font-bold flex-1 text-left">{m.home}</p>
+                    <p className="text-lg font-black mx-3" style={{ color: accentColor }}>{m.homeScore} — {m.awayScore}</p>
+                    <p className="text-xs text-white font-bold flex-1 text-right">{m.away}</p>
+                  </div>
+                  <p className="text-[9px] text-[#555] text-center mt-2 font-mono">{m.date}</p>
+                </Card>
+              ))}
+            </div>
+          )}
 
-              {sports.length > 0 && (
-                <div className="space-y-2">
-                  {sports.map(m => (
-                    <div key={m.id} className="bg-[#0E0E0E] rounded-xl p-3 border border-[#1A1A1A] space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-[#00E676] font-mono">{m.league}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
-                          m.status.includes('Live') ? 'bg-[#00E67622] text-[#00E676]' :
-                          m.status.includes('FT') ? 'bg-[#FF6D6D22] text-[#FF6D6D]' :
-                          'bg-[#FFE06622] text-[#FFE066]'
-                        }`}>{m.status}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-white font-semibold">{m.homeTeam}</span>
-                        <span className="text-sm font-black text-white px-3">
-                          {m.homeScore} - {m.awayScore}
-                        </span>
-                        <span className="text-xs text-[#CCC] font-semibold">{m.awayTeam}</span>
-                      </div>
+          {/* 4. News */}
+          {activeTool === 'news' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="📰" title="News Headlines" />
+              <PillBar items={['world', 'technology', 'sports', 'business', 'science']} active={newsCat} onChange={c => { setNewsCat(c); setNews([]); }} accent={accentColor} />
+              <ActionBtn onClick={loadNews} color={accentColor}>📡 Load {newsCat.charAt(0).toUpperCase() + newsCat.slice(1)} News</ActionBtn>
+              {news.map((n, i) => (
+                <Card key={i}>
+                  <p className="text-xs text-white font-semibold leading-snug">{n.title}</p>
+                  {n.desc && <p className="text-[10px] text-[#666] mt-1.5 line-clamp-2">{n.desc}</p>}
+                  <div className="flex items-center justify-between mt-2">
+                    <Tag color="#7C4DFF">{n.source}</Tag>
+                    {n.url !== '#' && <a href={n.url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline">Read ↗</a>}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* 5. Random User */}
+          {activeTool === 'user' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🆔" title="Random User Generator" />
+              <ActionBtn onClick={loadUser} color={accentColor}>👤 Generate Random User</ActionBtn>
+              {userProfile && (
+                <Card>
+                  <div className="flex items-center gap-3 mb-3">
+                    <img src={userProfile.avatar} alt="avatar" className="w-16 h-16 rounded-full border-2 object-cover" style={{ borderColor: accentColor }} onError={e => (e.currentTarget.src = `https://api.dicebear.com/8.x/personas/svg?seed=${userProfile.username}`)} />
+                    <div>
+                      <p className="text-white font-bold">{userProfile.name}</p>
+                      <p className="text-[#666] text-xs font-mono">@{userProfile.username}</p>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {sportsError && (
-                <div className="bg-[#1A0000] border border-[#FF1744] rounded-xl p-3 text-xs text-[#FF6D6D]">⚠️ {sportsError}</div>
+                  </div>
+                  {[['Email', userProfile.email], ['Phone', userProfile.phone], ['Address', userProfile.address]].map(([k, v]) => <RowKV key={k} label={k} value={v} />)}
+                  <button onClick={() => navigator.clipboard?.writeText(JSON.stringify(userProfile, null, 2))} className="mini-chip mt-3">📋 Copy as JSON</button>
+                </Card>
               )}
             </div>
           )}
 
-          {/* ===== NEWS ===== */}
-          {activeTool === 'news' && (
+          {/* 6. Colors */}
+          {activeTool === 'colors' && !loading && (
             <div className="space-y-3">
-              <div className="flex gap-1.5 flex-wrap">
-                {['general', 'technology', 'sports', 'entertainment', 'science', 'business'].map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setNewsCategory(cat)}
-                    className="text-[10px] px-2.5 py-1 rounded-full font-mono transition-all active:scale-95"
-                    style={{
-                      background: newsCategory === cat ? '#7C4DFF22' : '#111',
-                      color: newsCategory === cat ? '#B388FF' : '#666',
-                      border: `1px solid ${newsCategory === cat ? '#7C4DFF44' : '#222'}`,
-                    }}
-                  >
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              <SectionHeader icon="🎨" title="Color Palette Generator" />
+              <ActionBtn onClick={() => setPalette(generatePalette())} color={accentColor}>🎲 Generate New Palette</ActionBtn>
+              <div className="flex h-28 rounded-xl overflow-hidden border border-[#222] shadow-inner">
+                {palette.map(c => (
+                  <button key={c} onClick={() => navigator.clipboard?.writeText(c)} title={c} className="flex-1 flex items-end justify-center pb-2 hover:brightness-110 transition-all active:scale-y-90" style={{ backgroundColor: c }}>
+                    <span className="text-[8px] font-mono text-white/70 bg-black/30 px-1 rounded">{c}</span>
                   </button>
                 ))}
               </div>
+              <div className="grid grid-cols-5 gap-2">
+                {palette.map(c => (
+                  <div key={c} className="text-center">
+                    <div className="h-10 rounded-lg border border-[#222] mb-1 hover:brightness-110 cursor-pointer" style={{ backgroundColor: c }} onClick={() => navigator.clipboard?.writeText(c)} />
+                    <p className="text-[9px] text-[#666] font-mono">{c}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-center text-[10px] text-[#555]">Click any color to copy hex code</p>
+            </div>
+          )}
 
-              <button onClick={loadNews} disabled={newsLoading}
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-black active:scale-95 transition-all"
-                style={{ background: 'linear-gradient(135deg, #7C4DFF, #651FFF)' }}>
-                {newsLoading ? '#ading...' : '📰 Load Headlines'}
-              </button>
+          {/* 7. University */}
+          {activeTool === 'university' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🎓" title="University Search" />
+              <SearchBox value={uniQ} setValue={setUniQ} onSearch={loadUni} placeholder="IIT, MIT, Oxford, Harvard..." accent={accentColor} />
+              <PillBar items={['IIT', 'MIT', 'Oxford', 'Stanford', 'Delhi']} active="" onChange={q => { setUniQ(q); }} accent={accentColor} />
+              <CardItems items={unis.map(u => ({ title: u.name, sub: u.country, url: u.web_pages?.[0] }))} />
+            </div>
+          )}
 
-              {news.length > 0 && (
-                <div className="space-y-2">
-                  {news.map((n, i) => (
-                    <div key={i} className="bg-[#0E0E0E] rounded-xl p-3 border border-[#1A1A1A] space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#7C4DFF22] text-[#B388FF] font-mono">{n.source}</span>
-                        <span className="text-[9px] text-[#555] font-mono">{n.publishedAt}</span>
+          {/* 8. Research Papers */}
+          {activeTool === 'research' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="📊" title="Research Papers (OpenAlex 250M+)" />
+              <SearchBox value={paperQ} setValue={setPaperQ} onSearch={loadPapers} placeholder="machine learning, climate change..." accent={accentColor} />
+              <PillBar items={['machine learning', 'COVID-19', 'quantum', 'climate', 'cancer']} active="" onChange={q => setPaperQ(q)} accent={accentColor} />
+              {papers.map((p, i) => (
+                <Card key={i}>
+                  <p className="text-xs text-white font-semibold leading-snug">{p.display_name}</p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {p.publication_year && <Tag color="#4285F4">{p.publication_year}</Tag>}
+                    <Tag color="#10A37F">⭐ {p.cited_by_count || 0} citations</Tag>
+                  </div>
+                  {(p.landing || p.doi) && <a href={p.landing || p.doi} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline mt-1.5 inline-block">View Paper ↗</a>}
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* 9. Dictionary */}
+          {activeTool === 'dictionary' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="📚" title="Dictionary (Dual API)" />
+              <SearchBox value={wordQ} setValue={setWordQ} onSearch={loadDict} placeholder="serendipity, ephemeral..." accent={accentColor} />
+              <PillBar items={['serendipity', 'melancholy', 'ephemeral', 'ubiquitous', 'apple']} active="" onChange={w => setWordQ(w)} accent={accentColor} />
+              {dictSimple && <Card><p className="text-[10px] text-[#777] font-mono mb-1">SIMPLIFIED DEFINITION</p><p className="text-sm text-white">{dictSimple}</p></Card>}
+              {dictEntries.map(entry => (
+                <Card key={entry.word}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="text-white font-black">{entry.word}</h4>
+                    {entry.phonetic && <span className="text-xs text-[#777] font-mono">{entry.phonetic}</span>}
+                    <button onClick={() => readAloud(entry.word)} className="mini-chip ml-auto">🔊</button>
+                  </div>
+                  {entry.meanings.slice(0, 3).map(m => (
+                    <div key={m.partOfSpeech} className="mb-2">
+                      <Tag color="#AA00FF">{m.partOfSpeech}</Tag>
+                      <p className="text-xs text-[#CCC] mt-1.5">{m.definitions[0]?.definition}</p>
+                      {m.definitions[0]?.example && <p className="text-[10px] text-[#666] italic mt-1">"{m.definitions[0].example}"</p>}
+                    </div>
+                  ))}
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* 10. Movies */}
+          {activeTool === 'movies' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🎬" title="Movies & TV Shows" />
+              <SearchBox value={movieQ} setValue={setMovieQ} onSearch={loadMovies} placeholder="Avengers, RRR, Breaking Bad..." accent={accentColor} />
+              {movies.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {movies.map(m => (
+                    <a key={m.id} href={`https://www.imdb.com/title/${m.id}`} target="_blank" rel="noreferrer" className="card hover:border-[#333] transition-colors">
+                      {m.poster && <img src={m.poster} alt={m.title} className="w-full h-32 object-cover rounded-lg bg-[#1A1A1A] mb-2" onError={e => (e.currentTarget.style.display = 'none')} />}
+                      <p className="text-white text-xs font-bold leading-snug">{m.title}</p>
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {m.year && <Tag color="#FFB300">{m.year}</Tag>}
+                        <Tag color="#555">{m.type}</Tag>
                       </div>
-                      <p className="text-xs text-white font-semibold leading-relaxed">{n.title}</p>
-                      {n.description && (
-                        <p className="text-[10px] text-[#888] line-clamp-2">{n.description}</p>
-                      )}
-                      <a href={n.url} target="_blank" rel="noreferrer"
-                        className="text-[10px] font-mono hover:underline" style={{ color: '#7C4DFF' }}>
-                        Read more →
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 11. Transit */}
+          {activeTool === 'transit' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🚌" title="Public Transport Locator" />
+              <SearchBox value={transitQ} setValue={setTransitQ} onSearch={loadTransit} placeholder="Berlin, Mumbai, Tokyo station..." accent={accentColor} />
+              <PillBar items={['Berlin Hbf', 'Mumbai CST', 'Tokyo', 'London Bridge', 'Paris']} active="" onChange={q => setTransitQ(q)} accent={accentColor} />
+              <CardItems items={stops.map(s => ({
+                title: s.name, badge: s.type,
+                sub: s.lat ? `📍 ${s.lat.toFixed(4)}, ${s.lon?.toFixed(4)}` : undefined,
+                url: s.lat ? `https://maps.google.com/?q=${s.lat},${s.lon}` : undefined,
+              }))} />
+            </div>
+          )}
+
+          {/* 12. DevAI */}
+          {activeTool === 'devai' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🤖" title="DevToolBox AI (Free)" />
+              <div>
+                <p className="text-[10px] text-[#555] font-mono mb-1.5">PROMPT / CODE</p>
+                <textarea
+                  value={devPrompt}
+                  onChange={e => setDevPrompt(e.target.value)}
+                  className="tool-input min-h-[110px] resize-none"
+                  placeholder="Write a Python function to check if a number is prime..."
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <ActionBtn onClick={() => loadDevAI('generate')} color={accentColor}>✨ Generate</ActionBtn>
+                <ActionBtn onClick={() => loadDevAI('fix')} color={accentColor}>🔧 Fix Code</ActionBtn>
+                <ActionBtn onClick={() => loadDevAI('user')} color={accentColor} variant="outline">👤 Fake User</ActionBtn>
+              </div>
+              {devResult && (
+                <Card>
+                  <div className="flex items-center justify-between mb-2">
+                    <Tag color={accentColor}>AI Output</Tag>
+                    <button onClick={() => navigator.clipboard?.writeText(devResult)} className="mini-chip">📋 Copy</button>
+                  </div>
+                  <pre className="text-[11px] text-[#CCC] whitespace-pre-wrap leading-relaxed max-h-56 overflow-auto">{devResult}</pre>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* 13. Math */}
+          {activeTool === 'math' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🧮" title="Quick Math Calculator" />
+              <SearchBox value={mathExpr} setValue={setMathExpr} onSearch={loadMath} placeholder="(100 + 200) * 3 / 15" accent={accentColor} label="Expression (+ - * / ^ %)" />
+              <PillBar items={['2^10', '(1+1/1000)^1000', '100*0.18', '(12+8)*5/2', '360/7']} active="" onChange={e => setMathExpr(e)} accent={accentColor} />
+              {mathResult && (
+                <Card>
+                  <p className="text-[10px] text-[#555] font-mono mb-1">RESULT</p>
+                  <p className="text-2xl font-black" style={{ color: accentColor }}>{mathResult}</p>
+                  <p className="text-xs text-[#555] mt-1 font-mono">{mathExpr} = {mathResult}</p>
+                </Card>
+              )}
+              <Card>
+                <p className="text-[10px] text-[#555] font-mono mb-1.5">SUPPORTED OPERATORS</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['+', '−', '×', '÷', '^', '%', '( )'].map(op => <Tag key={op} color="#666">{op}</Tag>)}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* 14. Trivia */}
+          {activeTool === 'trivia' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="❓" title="Trivia Quiz (Open Trivia DB)" />
+              <ActionBtn onClick={loadTrivia} color={accentColor}>🎲 New Random Question</ActionBtn>
+              {trivia && (
+                <Card>
+                  <Tag color="#7C4DFF">{trivia.category}</Tag>
+                  <p className="text-sm text-white font-semibold mt-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: decodeHtml(trivia.question) }} />
+                  {!triviaAns && (
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      {[trivia.correct_answer, ...trivia.incorrect_answers].sort(() => Math.random() - 0.5).map((ans, i) => (
+                        <button key={i} onClick={() => setTriviaAns(true)} className="tool-input text-left hover:border-[#555] cursor-pointer transition-colors text-xs" style={{ cursor: 'pointer' }}>{decodeHtml(ans)}</button>
+                      ))}
+                    </div>
+                  )}
+                  {triviaAns && (
+                    <div className="mt-3 p-3 rounded-lg bg-[#001A00] border border-[#00E67644]">
+                      <p className="text-[10px] text-[#00E676] font-mono mb-1">✅ CORRECT ANSWER</p>
+                      <p className="text-sm text-white font-bold">{decodeHtml(trivia.correct_answer)}</p>
+                    </div>
+                  )}
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* 15. NASA */}
+          {activeTool === 'nasa' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🚀" title="NASA Astronomy Picture of the Day" />
+              <ActionBtn onClick={loadNasa} color={accentColor}>🌌 Load Today's NASA APOD</ActionBtn>
+              {nasa && (
+                <Card>
+                  {nasa.media_type === 'image'
+                    ? <img src={nasa.url} alt={nasa.title} className="w-full rounded-xl mb-3" />
+                    : <a href={nasa.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 bg-[#141414] rounded-xl mb-3 text-blue-400 text-sm">▶ Watch on NASA ↗</a>
+                  }
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h4 className="text-white font-black text-sm flex-1">{nasa.title}</h4>
+                    <Tag color="#555">{nasa.date}</Tag>
+                  </div>
+                  <p className="text-xs text-[#AAA] leading-relaxed line-clamp-5">{nasa.explanation}</p>
+                  <button onClick={() => readAloud(nasa.explanation)} className="mini-chip mt-2">🔊 Listen</button>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* 16. Music */}
+          {activeTool === 'music' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🎵" title="Music Artist Info (Wikipedia)" />
+              <SearchBox value={artistQ} setValue={setArtistQ} onSearch={loadMusic} placeholder="Arijit Singh, Taylor Swift..." accent={accentColor} />
+              <PillBar items={['Arijit Singh', 'AR Rahman', 'Taylor Swift', 'BTS', 'Coldplay']} active="" onChange={a => setArtistQ(a)} accent={accentColor} />
+              {artistInfo && (
+                <Card>
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-[#1A1A1A] flex items-center justify-center text-2xl shrink-0">🎤</div>
+                    <div>
+                      <h4 className="text-white font-black">{artistInfo.name}</h4>
+                      <button onClick={() => readAloud(artistInfo.summary)} className="mini-chip mt-1">🔊 Listen</button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#AAA] leading-relaxed">{artistInfo.summary}</p>
+                  <a href={artistInfo.url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline mt-2 inline-block">Read full article on Wikipedia ↗</a>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* 17. Recipes */}
+          {activeTool === 'recipes' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🍲" title="Food Recipes (TheMealDB)" />
+              <SearchBox value={recipeQ} setValue={setRecipeQ} onSearch={loadRecipes} placeholder="chicken, biryani, pasta..." accent={accentColor} />
+              <PillBar items={['Chicken', 'Biryani', 'Pasta', 'Cake', 'Soup', 'Sushi']} active="" onChange={r => setRecipeQ(r)} accent={accentColor} />
+              <div className="grid grid-cols-2 gap-2">
+                {recipes.map((m: any) => (
+                  <div key={m.idMeal} className="card">
+                    <img src={m.strMealThumb} alt={m.strMeal} className="w-full h-28 object-cover rounded-lg mb-2" />
+                    <p className="text-white text-xs font-bold leading-snug">{m.strMeal}</p>
+                    <div className="flex gap-1 flex-wrap mt-1">
+                      <Tag color="#FF7000">{m.strCategory}</Tag>
+                      <Tag color="#4285F4">{m.strArea}</Tag>
+                    </div>
+                    {(m.strSource || m.strYoutube) && (
+                      <a href={m.strSource || m.strYoutube} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline mt-1.5 inline-block">
+                        {m.strYoutube ? '▶ Watch Recipe' : 'View Recipe ↗'}
                       </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 18. Cocktails */}
+          {activeTool === 'cocktails' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🍹" title="Cocktail Recipes (TheCocktailDB)" />
+              <SearchBox value={cocktailQ} setValue={setCocktailQ} onSearch={loadCocktails} placeholder="mojito, margarita..." accent={accentColor} />
+              <PillBar items={['Margarita', 'Mojito', 'Martini', 'Daiquiri', 'Negroni']} active="" onChange={c => setCocktailQ(c)} accent={accentColor} />
+              <div className="grid grid-cols-2 gap-2">
+                {cocktails.map((d: any) => (
+                  <div key={d.idDrink} className="card">
+                    <img src={d.strDrinkThumb} alt={d.strDrink} className="w-full h-28 object-cover rounded-lg mb-2" />
+                    <p className="text-white text-xs font-bold">{d.strDrink}</p>
+                    <Tag color="#39C5BB">{d.strCategory}</Tag>
+                    <p className="text-[10px] text-[#777] mt-1">{(d.strInstructions || '').slice(0, 80)}...</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 19. Poetry */}
+          {activeTool === 'poetry' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="📜" title="Random Poetry (PoetryDB)" />
+              <ActionBtn onClick={loadPoems} color={accentColor}>📖 Load 5 Random Poems</ActionBtn>
+              {poems.map((p: any, i: number) => (
+                <Card key={i}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h4 className="text-white font-black text-sm leading-snug">{p.title}</h4>
+                    <Tag color="#D97757">{p.linecount} lines</Tag>
+                  </div>
+                  <p className="text-[10px] text-[#777] mb-2 font-mono">by {p.author}</p>
+                  <pre className="text-xs text-[#CCC] whitespace-pre-wrap leading-relaxed font-serif italic">{(p.lines || []).slice(0, 8).join('\n')}</pre>
+                  {(p.lines?.length || 0) > 8 && <p className="text-[10px] text-[#555] mt-1">...and {(p.lines.length || 0) - 8} more lines</p>}
+                  <button onClick={() => readAloud(`${p.title} by ${p.author}. ${(p.lines || []).join('. ')}`)} className="mini-chip mt-2">🔊 Listen</button>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* 20. Countries */}
+          {activeTool === 'countries' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="🌍" title="World Country Data" onRead={() => country && readAloud(`${country.name} is located in ${country.region}. Capital is ${country.capital}. Population is ${country.pop}.`)} />
+              <SearchBox value={countryQ} setValue={setCountryQ} onSearch={loadCountry} placeholder="India, Japan, Brazil..." accent={accentColor} />
+              <PillBar items={['India', 'USA', 'Japan', 'Germany', 'Brazil', 'Australia']} active="" onChange={c => setCountryQ(c)} accent={accentColor} />
+              {country && (
+                <Card>
+                  {country.flag && <img src={country.flag} alt={country.name} className="w-full h-24 object-cover rounded-xl mb-3 border border-[#222]" />}
+                  {[['Name', country.name], ['Official Name', country.official], ['Capital', country.capital], ['Region', country.region], ['Population', country.pop], ['Area', country.area], ['Languages', country.langs], ['Currencies', country.curr]].map(([k, v]) => <RowKV key={k} label={k} value={v} />)}
+                  {country.maps && <a href={country.maps} target="_blank" rel="noreferrer" className="mt-2 text-[10px] text-blue-400 hover:underline inline-block">📍 View on Google Maps ↗</a>}
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* 21. GitHub */}
+          {activeTool === 'github' && !loading && (
+            <div className="space-y-3">
+              <SectionHeader icon="💻" title="GitHub Repos (Public API)" />
+              <SearchBox value={ghQ} setValue={setGhQ} onSearch={loadGitHub} placeholder="react, nextjs, python..." accent={accentColor} />
+              <PillBar items={['react', 'nextjs', 'python', 'flutter', 'rust', 'golang']} active="" onChange={q => setGhQ(q)} accent={accentColor} />
+              {ghRepos.map((r: any, i: number) => (
+                <Card key={i}>
+                  <div className="flex items-start justify-between gap-2">
+                    <a href={r.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-400 hover:underline leading-snug">{r.name}</a>
+                    <div className="flex gap-1 shrink-0">
+                      <Tag color="#FFB300">⭐ {r.stars?.toLocaleString()}</Tag>
+                      <Tag color="#10A37F">🍴 {r.forks?.toLocaleString()}</Tag>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {newsError && (
-                <div className="bg-[#1A0000] border border-[#FF1744] rounded-xl p-3 text-xs text-[#FF6D6D]">⚠️ {newsError}</div>
-              )}
-            </div>
-          )}
-
-          {/* ===== RANDOM USER ===== */}
-          {activeTool === 'user' && (
-            <div className="space-y-3">
-              <button onClick={loadUser} disabled={userLoading}
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-black active:scale-95 transition-all"
-                style={{ background: 'linear-gradient(135deg, #FF6D6D, #FF1744)' }}>
-                {userLoading ? '⏳ Generating...' : '🆔 Generate Random User'}
-              </button>
-
-              {user && (
-                <div className="rounded-xl p-4 border space-y-3 animate-fadeIn text-center" style={{ background: '#1A0A0A', borderColor: '#FF174433' }}>
-                  <img src={user.avatar} alt="avatar" className="w-20 h-20 rounded-full mx-auto border-2 border-[#FF1744] object-cover" />
-                  <div>
-                    <p className="text-sm text-white font-bold">{user.name}</p>
-                    <p className="text-[10px] text-[#FF6D6D] font-mono">@{user.username}</p>
                   </div>
-                  <div className="space-y-1.5 text-left">
-                    {[
-                      { icon: '📧', label: 'Email', value: user.email },
-                      { icon: '📱', label: 'Phone', value: user.phone },
-                      { icon: '🏠', label: 'Address', value: user.address },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-start gap-2 py-1 border-b border-[#2A1A1A] last:border-0">
-                        <span className="text-sm">{item.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[9px] text-[#FF6D6D] font-mono uppercase">{item.label}</p>
-                          <p className="text-[11px] text-[#CCC] truncate">{item.value}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(JSON.stringify(user, null, 2)).catch(() => {}); }}
-                    className="text-[10px] px-3 py-1.5 rounded-lg border border-[#333] text-[#999] hover:text-white transition-colors"
-                  >
-                    📋 Copy JSON
-                  </button>
-                </div>
-              )}
+                  {r.desc && <p className="text-[10px] text-[#777] mt-1.5">{r.desc}</p>}
+                  {r.lang && <Tag color="#7C4DFF">{r.lang}</Tag>}
+                </Card>
+              ))}
             </div>
           )}
-
-          {/* ===== COLOR PALETTE ===== */}
-          {activeTool === 'color' && (
-            <div className="space-y-3">
-              <button onClick={loadColors} disabled={colorLoading}
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-black active:scale-95 transition-all"
-                style={{ background: 'linear-gradient(135deg, #E040FB, #AA00FF)' }}>
-                {colorLoading ? '#ating...' : '🎨 Generate Palette'}
-              </button>
-
-              {colorPalette && (
-                <div className="space-y-3 animate-fadeIn">
-                  <div className="flex gap-2 rounded-xl overflow-hidden h-24 border border-[#1A1A1A]">
-                    {colorPalette.colors.map((c, i) => (
-                      <div key={i} className="flex-1 flex items-end justify-center pb-2 cursor-pointer hover:scale-y-110 transition-transform"
-                        style={{ backgroundColor: c }}
-                        onClick={() => navigator.clipboard.writeText(c).catch(() => {})}>
-                        <span className="text-[8px] text-white/80 font-mono bg-black/30 px-1 rounded">{c}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-center text-[10px] text-[#888] font-mono">
-                    Click any color to copy • {colorPalette.name}
-                  </p>
-                  <div className="grid grid-cols-5 gap-2">
-                    {colorPalette.colors.map((c, i) => (
-                      <div key={i} className="aspect-square rounded-lg border border-[#222] cursor-pointer hover:scale-105 transition-transform"
-                        style={{ backgroundColor: c }}
-                        onClick={() => navigator.clipboard.writeText(c).catch(() => {})} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ===== UNIVERSITIES ===== */}
-          {activeTool === 'uni' && (
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={uniSearch}
-                  onChange={e => setUniSearch(e.target.value)}
-                  placeholder="University name..."
-                  className="flex-1 bg-[#111] border border-[#333] rounded-lg px-3 py-2 text-xs"
-                />
-                <button onClick={async () => { setLoadingNew(true); setUnis(await fetchUniversities(uniSearch)); setLoadingNew(false); }} className="px-4 py-2 bg-blue-600 rounded-lg text-xs font-bold">Search</button>
-              </div>
-              <div className="space-y-2">
-                {unis.map((u, i) => (
-                  <div key={i} className="p-2 bg-[#111] rounded-lg border border-[#222]">
-                    <p className="text-xs font-bold text-white">{u.name}</p>
-                    <p className="text-[10px] text-[#666]">{u.country}</p>
-                    <a href={u.web_pages[0]} target="_blank" className="text-[10px] text-blue-400">Visit Website</a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ===== RESEARCH PAPERS ===== */}
-          {activeTool === 'paper' && (
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={researchSearch}
-                  onChange={e => setResearchSearch(e.target.value)}
-                  placeholder="Topic..."
-                  className="flex-1 bg-[#111] border border-[#333] rounded-lg px-3 py-2 text-xs"
-                />
-                <button onClick={async () => { setLoadingNew(true); setPapers(await fetchResearch(researchSearch)); setLoadingNew(false); }} className="px-4 py-2 bg-green-600 rounded-lg text-xs font-bold">Find</button>
-              </div>
-              <div className="space-y-2">
-                {papers.map((p, i) => (
-                  <div key={i} className="p-2 bg-[#111] rounded-lg border border-[#222]">
-                    <p className="text-xs font-bold text-white">{p.display_name || p.title}</p>
-                    <p className="text-[10px] text-[#666]">Year: {p.publication_year}</p>
-                    {p.doi && <a href={p.doi} target="_blank" className="text-[10px] text-green-400">View Paper</a>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ===== DICTIONARY ===== */}
-          {activeTool === 'dict' && (
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={dictSearch}
-                  onChange={e => setDictSearch(e.target.value)}
-                  placeholder="Word..."
-                  className="flex-1 bg-[#111] border border-[#333] rounded-lg px-3 py-2 text-xs"
-                />
-                <button onClick={async () => { setLoadingNew(true); setDefinitions(await fetchDictionary(dictSearch)); setLoadingNew(false); }} className="px-4 py-2 bg-purple-600 rounded-lg text-xs font-bold">Define</button>
-              </div>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {definitions.map((d, i) => (
-                  <div key={i} className="p-3 bg-[#111] rounded-lg border border-[#222]">
-                    <p className="text-sm font-black text-purple-400">{d.word} <span className="text-xs font-normal text-[#666]">{d.phonetic}</span></p>
-                    {d.meanings.map((m: any, j: number) => (
-                      <div key={j} className="mt-2">
-                        <p className="text-[10px] uppercase text-[#666]">{m.partOfSpeech}</p>
-                        <p className="text-xs text-[#CCC]">{m.definitions[0].definition}</p>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ===== TRIVIA ===== */}
-          {activeTool === 'trivia' && (
-            <div className="space-y-4 text-center py-4">
-              {trivia ? (
-                <div className="space-y-4">
-                  <p className="text-[10px] text-purple-400 font-mono uppercase">{trivia.category}</p>
-                  <p className="text-sm text-white font-medium px-4" dangerouslySetInnerHTML={{ __html: trivia.question }} />
-                  <button onClick={() => alert(`Correct Answer: ${trivia.correct_answer}`)} className="w-full py-2 bg-[#111] border border-purple-900 rounded-lg text-xs">Show Answer</button>
-                  <button onClick={loadTrivia} className="w-full py-2 bg-purple-600 rounded-lg text-xs font-bold">Next Question</button>
-                </div>
-              ) : <p className="text-xs text-[#666]">Tap Load to start quiz</p>}
-            </div>
-          )}
-
-          {/* ===== NASA ===== */}
-          {activeTool === 'nasa' && (
-            <div className="space-y-3">
-              {nasa ? (
-                <div className="space-y-2">
-                  <img src={nasa.url} alt="NASA" className="w-full rounded-xl border border-[#222]" />
-                  <p className="text-xs font-bold text-white">{nasa.title}</p>
-                  <p className="text-[10px] text-[#888] leading-relaxed line-clamp-4">{nasa.explanation}</p>
-                  <button onClick={loadNasa} className="w-full py-2 bg-blue-600 rounded-lg text-xs font-bold">Refresh Astronomy Pic</button>
-                </div>
-              ) : <button onClick={loadNasa} className="w-full py-12 bg-[#111] rounded-xl border border-dashed border-[#333]">Load NASA APOD</button>}
-            </div>
-          )}
-
-          {/* ===== MUSIC (Original restored) ===== */}
-          {activeTool === 'music' && (
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={musicSearch}
-                  onChange={e => setMusicSearch(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && searchMusic()}
-                  placeholder={lang === 'hi' ? 'Artist ka naam likho...' : 'Enter artist name...'}
-                  className="flex-1 bg-[#111] border border-[#333] rounded-lg px-3 py-2 text-[#EEE] text-xs focus:outline-none"
-                  style={{ borderColor: '#AA00FF' }}
-                />
-                <button onClick={searchMusic} disabled={musicLoading}
-                  className="px-4 py-2 rounded-lg text-xs font-bold text-black active:scale-95 transition-all"
-                  style={{ background: 'linear-gradient(135deg, #AA00FF, #7C4DFF)' }}>
-                  {musicLoading ? '⏳' : '🔍'}
-                </button>
-              </div>
-
-              {/* Quick Select */}
-              <div className="flex gap-1.5 flex-wrap">
-                {POPULAR_ARTISTS.map(a => (
-                  <button key={a} onClick={() => { setMusicSearch(a); }}
-                    className="text-[10px] px-2 py-1 rounded-full border text-[#999] hover:text-white transition-colors"
-                    style={{ borderColor: '#AA00FF44', background: '#111' }}>
-                    {a}
-                  </button>
-                ))}
-              </div>
-
-              {music && (
-                <div className="rounded-xl p-4 border space-y-3 animate-fadeIn" style={{ background: '#1A0A2A', borderColor: '#AA00FF33' }}>
-                  <div className="text-center">
-                    <div className="text-4xl mb-2">🎵</div>
-                    <h3 className="text-sm text-white font-bold">{music.name}</h3>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#AA00FF22] text-[#CE93D8] font-mono">{music.genre}</span>
-                  </div>
-                  <p className="text-xs text-[#CCC] leading-relaxed">{music.summary}</p>
-                </div>
-              )}
-
-              {musicError && (
-                <div className="bg-[#1A0000] border border-[#FF1744] rounded-xl p-3 text-xs text-[#FF6D6D]">⚠️ {musicError}</div>
-              )}
-            </div>
-          )}
-
-          {loadingNew && <div className="py-8 text-center animate-pulse text-xs text-[#666]">Fetching data...</div>}
         </div>
 
-        {/* Footer */}
-        <div className="px-4 py-3 text-center" style={{ borderTop: `1px solid ${accentColor}11` }}>
-          <p className="text-[9px] text-[#444] font-mono">
-            All APIs: ipapi · exchangerate · football-API · RSS2JSON · randomuser.me · coolors · Wikipedia — All FREE
-          </p>
+        {/* ── Footer ── */}
+        <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${accentColor}11` }}>
+          <p className="text-[9px] text-[#444] font-mono">21 APIs · No keys required · Free forever</p>
+          <p className="text-[9px] text-[#333] font-mono">by @SudhirDevOps1</p>
         </div>
-
       </div>
     </div>
   );

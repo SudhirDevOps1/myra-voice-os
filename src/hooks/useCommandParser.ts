@@ -45,7 +45,10 @@ const APP_ALIASES: Record<string, string> = {
 };
 
 function normalizeText(input: string) {
-  return input.toLowerCase().replace(/[।,.!?;:]/g, ' ').replace(/\s+/g, ' ').trim();
+  let cleaned = input.toLowerCase().replace(/[।,.!?;:]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Strip wake words from the start of the command text so "myra open youtube" parses cleanly as "open youtube"
+  cleaned = cleaned.replace(/^(hey myra|hi myra|ok myra|okay myra|myra|maya|mira|मायरा|हे मायरा|please)\s+/i, '').trim();
+  return cleaned;
 }
 
 function normalizeAppName(app: string) {

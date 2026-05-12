@@ -6,7 +6,28 @@ All notable changes to MYRA are documented here.
 
 ---
 
-## [v2.5.0] — Production Ready (Current)
+## [v2.5.1] — Live Deployment Audit Fix (Current)
+
+### 🚨 Critical Bugs Fixed (Found via Live Audit of myra-voice-os.pages.dev)
+- **Tools Dashboard buttons appeared unstyled** — the new dashboard used custom utility classes (`tool-btn`, `tool-input`, `mini-chip`, `card`) that were never defined in `index.css`. Added all four utility classes plus `animate-fadeIn` and `line-clamp-*` so every Tools panel renders correctly.
+- **Page title was outdated** — old title "10+ Providers" replaced with "MYRA — AI Voice Assistant OS | 13 Providers · 16 Tools · By Sudhir Singh".
+- **Open Graph + author meta tags added** — for social link previews.
+- **Transit API failed in browser** (`transport.rest` lacks CORS) — switched to `v6.db.transport.rest` mirror with OpenStreetMap Nominatim fallback.
+- **IP Location single point of failure** — added 3-tier fallback chain: ipapi.co → ipwho.is → ipify (always returns at minimum the IP).
+- **DevToolBox AI generate button could throw** — wrapped in try/catch with friendly fallback message.
+- **DevToolBox Fix Code clarity** — improved error description sent with payload.
+
+### ✅ Verified Working After Fix
+- All 16 Tools tabs render with full styling
+- Sports/News/Currency/User/Colors/Universities/Research/Dictionary/Movies/Trivia/NASA/Music tools confirmed live
+- Calculator (35+ formulas) accessible from main action chip
+- Demo Call simulator with Priya/Boss/Mom presets
+- Read-aloud button on every chat message
+- Footer with Sudhir Singh + GitHub @SudhirDevOps1 branding intact
+
+---
+
+## [v2.5.0] — Production Ready
 
 ### 🎉 Major Updates
 - **Production-Grade Footer** — Beautiful, branded footer with Sudhir Singh credentials, GitHub links, theme-matching gradient, taglines, and responsive layout
