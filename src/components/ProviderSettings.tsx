@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AppSettings, AIProvider } from '../types';
 import { AI_PROVIDERS, PROVIDER_BY_ID, type ApiKeyField } from '../types/providers';
+import MyraLogo from './MyraLogo';
 
 interface ProviderSettingsProps {
   settings: AppSettings;
@@ -27,9 +28,12 @@ export default function ProviderSettings({ settings, onUpdate, onClose }: Provid
     <div className="fixed inset-0 z-50 bg-black/90 flex items-start justify-center overflow-y-auto pt-8 pb-16">
       <div className="w-full max-w-md bg-[#0A0A0A] rounded-2xl border border-[#222] p-6 space-y-5 mx-4 my-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-[#FF1744] text-xl font-black tracking-wider">AI PROVIDER</h2>
-            <p className="text-[#666] text-xs font-mono mt-1">10+ engines, one MYRA voice</p>
+          <div className="flex items-center gap-3">
+            <MyraLogo size={34} accent="#FF1744" />
+            <div>
+              <h2 className="text-[#FF1744] text-xl font-black tracking-wider">AI PROVIDER</h2>
+              <p className="text-[#666] text-xs font-mono mt-1">10+ engines, one MYRA voice</p>
+            </div>
           </div>
           <button onClick={onClose} className="text-[#888] hover:text-white transition-colors">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

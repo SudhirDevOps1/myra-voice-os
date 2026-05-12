@@ -1,4 +1,5 @@
 import { AI_PROVIDERS } from '../types/providers';
+import MyraLogo from './MyraLogo';
 
 interface AboutPanelProps {
   open: boolean;
@@ -13,11 +14,8 @@ export default function AboutPanel({ open, onClose, accentColor }: AboutPanelPro
     <div className="fixed inset-0 z-50 bg-black/85 flex justify-center items-start overflow-y-auto pt-12 pb-12 px-4">
       <div className="w-full max-w-md bg-[#0A0A0A] rounded-2xl border border-[#1A1A1A] p-6 space-y-5 my-4">
         <div className="text-center">
-          <div
-            className="w-20 h-20 rounded-2xl mx-auto flex items-center justify-center text-4xl font-black"
-            style={{ backgroundColor: `${accentColor}22`, color: accentColor }}
-          >
-            M
+          <div className="w-20 h-20 rounded-2xl mx-auto flex items-center justify-center" style={{ backgroundColor: `${accentColor}15` }}>
+            <MyraLogo size={76} accent={accentColor} />
           </div>
           <h2 className="text-white text-2xl font-black mt-3 tracking-[0.3em]">MYRA</h2>
           <p className="text-[#666] text-xs font-mono mt-1">AI Voice Assistant v2.0</p>

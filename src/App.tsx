@@ -16,6 +16,7 @@ import AboutPanel from './components/AboutPanel';
 import TokenTracker from './components/TokenTracker';
 import BackupPanel from './components/BackupPanel';
 import MemoryPanel from './components/MemoryPanel';
+import MyraLogo from './components/MyraLogo';
 import { useSettings } from './hooks/useSettings';
 import { useMultiAI, type MultiAICallbacks } from './hooks/useMultiAI';
 import { useAudioEngine, AudioEngineCallbacks } from './hooks/useAudioEngine';
@@ -121,7 +122,6 @@ export default function App() {
     onOutputTranscript: (text: string) => {
       setStreamingText('');
       addMessage(text, false);
-      recordResponseTime(0); // actual time tracked in sendText
     },
     onInputTranscript: (text: string) => addMessage(text, true),
     onTurnComplete: () => { setStreamingText(''); setIsThinking(false); },
@@ -430,7 +430,10 @@ export default function App() {
           <span className="text-[#555] font-mono text-[10px]">{ramStr}</span>
         </div>
         <div className="flex flex-col items-center">
-          <h1 className="text-2xl font-black tracking-[0.3em] leading-none" style={{ color: theme.primary }}>MYRA</h1>
+          <div className="flex items-center gap-2">
+            <MyraLogo size={30} accent={theme.primary} />
+            <h1 className="text-2xl font-black tracking-[0.3em] leading-none" style={{ color: theme.primary }}>MYRA</h1>
+          </div>
           <span className="text-[#555] font-mono text-[10px] tracking-[0.2em] mt-0.5">AI VOICE ASSISTANT v2.0</span>
         </div>
         <div className="flex flex-col items-end gap-0.5">

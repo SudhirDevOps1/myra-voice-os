@@ -9,6 +9,7 @@ import {
   GEMINI_VOICES,
   PERSONALITY_LABELS,
 } from '../types';
+import MyraLogo from './MyraLogo';
 
 interface SettingsPanelProps {
   settings: AppSettings;
@@ -53,7 +54,10 @@ export default function SettingsPanel({
       <div className="w-full max-w-md bg-[#0A0A0A] rounded-2xl border border-[#222] p-6 space-y-5 mx-4">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-[#FF1744] text-xl font-black tracking-wider">⚙️ SETTINGS</h2>
+          <div className="flex items-center gap-3">
+            <MyraLogo size={28} accent="#FF1744" />
+            <h2 className="text-[#FF1744] text-xl font-black tracking-wider">SETTINGS</h2>
+          </div>
           <button onClick={onClose} className="text-[#888] hover:text-white transition-colors">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
